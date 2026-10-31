@@ -10,25 +10,17 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// Helper class Rectifier
-class RectData {
-  final TextEditingController kw;
-  final TextEditingController volt;
-  final TextEditingController occ;
+// Komponen Modular
+import '../components/unit_input_field.dart';
+import '../components/power_source_card.dart';
+import '../components/failed_devices_card.dart';
+import '../components/lvmdp_card.dart';
+import '../components/genset_card.dart';
+import '../components/tank_card.dart';
+import '../components/room_temp_card.dart';
+import '../components/rectifier_card.dart';
+import '../components/ups_card.dart';
 
-  RectData(String kwVal, String voltVal, String occVal)
-      : kw = TextEditingController(text: kwVal),
-        volt = TextEditingController(text: voltVal),
-        occ = TextEditingController(text: occVal);
-
-  void dispose() {
-    kw.dispose();
-    volt.dispose();
-    occ.dispose();
-  }
-}
-
-// Helper class UPS
 class UpsData {
   final TextEditingController kw;
   final TextEditingController occ;
@@ -60,15 +52,16 @@ class TtcSudiangPage extends StatefulWidget {
 }
 
 class _TtcSudiangPageState extends State<TtcSudiangPage> {
+  // Warna Utama dari Logo
+  static const Color primaryRed = Color(0xFFE71E26);
+
   int _currentTab = 0;
   final List<String> _tabs = ['1', '2', '3', '4', '5', 'Report'];
 
   final ImagePicker _picker = ImagePicker();
-
-  // Snapshot data laporan sebelumnya untuk perbandingan
   Map<String, dynamic> _lastSubmittedData = {};
 
-  // State Foto yang Diambil
+  // State Foto
   XFile? _fotoKwh;
   XFile? _fotoLvmdpPqs;
   XFile? _fotoLvmdpArus;
@@ -133,7 +126,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   final _voltGenset3Ctrl = TextEditingController(text: '0');
   final _suhuGenset3Ctrl = TextEditingController(text: '0');
 
-  // Spesifikasi Tangki BBM
+  // Tangki BBM
   static const double _tB1Panjang = 450.0;
   static const double _tB1Diameter = 182.0;
   static const double _tB23Panjang = 546.0;
@@ -141,7 +134,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   static const double _tH12Panjang = 244.0;
   static const double _tH12Diameter = 90.0;
 
-  // Batasan Maksimum Input Tangki BBM
   static const double _maxHeightB1 = 179.0;
   static const double _maxLiterB1 = 11662.0;
   static const double _maxHeightB23 = 129.0;
@@ -179,9 +171,14 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   final _f2CspsTempCtrl = TextEditingController(text: '0');
   final _f2CspsHumCtrl = TextEditingController(text: '0');
 
-  final List<RectData> _rects = List.generate(
+  late final List<RectifierItem> _rects = List.generate(
     13,
-        (index) => RectData('0', '0', '0'),
+        (index) => RectifierItem(
+      name: 'Rect. ${(index + 1).toString().padLeft(2, '0')} HUAWEI',
+      kwCtrl: TextEditingController(text: '0'),
+      voltCtrl: TextEditingController(text: '0'),
+      occCtrl: TextEditingController(text: '0'),
+    ),
   );
 
   final _ups202 = UpsData('0', '0', '0', '0', '0');
@@ -304,7 +301,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     _f5UtilBHumCtrl,
     _f5DcTempCtrl,
     _f5DcHumCtrl,
-    ..._rects.expand((r) => [r.kw, r.volt, r.occ]),
+    ..._rects.expand((r) => [r.kwCtrl, r.voltCtrl, r.occCtrl]),
     _ups202.kw,
     _ups202.occ,
     _ups202.volt,
@@ -387,7 +384,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       'backupTime': _backupTimeCtrl.text,
       'f1GensetTemp': _f1GensetTempCtrl.text,
       'f1GensetHum': _f1GensetHumCtrl.text,
-      'f1TrafoTemp': _f1TrafoTempCtrl.text,
+      'f1TrafoTemp': _f1TrafoHumCtrl.text,
       'f1TrafoHum': _f1TrafoHumCtrl.text,
       'f2BattTemp': _f2BattTempCtrl.text,
       'f2BattHum': _f2BattHumCtrl.text,
@@ -397,35 +394,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       'f2MscHum': _f2MscHumCtrl.text,
       'f2CspsTemp': _f2CspsTempCtrl.text,
       'f2CspsHum': _f2CspsHumCtrl.text,
-      'f3BattTemp': _f3BattTempCtrl.text,
-      'f3BattHum': _f3BattHumCtrl.text,
-      'f3RectiTemp': _f3RectiTempCtrl.text,
-      'f3RectiHum': _f3RectiHumCtrl.text,
-      'f3InvasTemp': _f3InvasTempCtrl.text,
-      'f3InvasHum': _f3InvasHumCtrl.text,
-      'f3CoreTemp': _f3CoreTempCtrl.text,
-      'f3CoreHum': _f3CoreHumCtrl.text,
-      'f3MkiosTemp': _f3MkiosTempCtrl.text,
-      'f3MkiosHum': _f3MkiosHumCtrl.text,
-      'f3OcsTemp': _f3OcsTempCtrl.text,
-      'f3OcsHum': _f3OcsHumCtrl.text,
-      'f4BattTemp': _f4BattTempCtrl.text,
-      'f4BattHum': _f4BattHumCtrl.text,
-      'f4RectiTemp': _f4RectiHumCtrl.text,
-      'f4RectiHum': _f4RectiHumCtrl.text,
-      'f4BscRncTemp': _f4BscRncTempCtrl.text,
-      'f4BscRncHum': _f4BscRncHumCtrl.text,
-      'f4InterTemp': _f4InterTempCtrl.text,
-      'f4InterHum': _f4InterHumCtrl.text,
-      'f4TransTemp': _f4TransTempCtrl.text,
-      'f4TransHum': _f4TransHumCtrl.text,
-      'f5UtilATemp': _f5UtilATempCtrl.text,
-      'f5UtilAHum': _f5UtilAHumCtrl.text,
-      'f5UtilBTemp': _f5UtilBTempCtrl.text,
-      'f5UtilBHum': _f5UtilBHumCtrl.text,
-      'f5DcTemp': _f5DcTempCtrl.text,
-      'f5DcHum': _f5DcHumCtrl.text,
-      'rects': _rects.map((r) => {'kw': r.kw.text, 'volt': r.volt.text, 'occ': r.occ.text}).toList(),
+      'rects': _rects.map((r) => {'kw': r.kwCtrl.text, 'volt': r.voltCtrl.text, 'occ': r.occCtrl.text}).toList(),
       'ups202': {
         'kw': _ups202.kw.text,
         'occ': _ups202.occ.text,
@@ -535,7 +504,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
           _f1GensetTempCtrl.text = data['f1GensetTemp'] ?? '0';
           _f1GensetHumCtrl.text = data['f1GensetHum'] ?? '0';
-          _f1TrafoTempCtrl.text = data['f1TrafoTemp'] ?? '0';
+          _f1TrafoTempCtrl.text = data['f1TrafoHum'] ?? '0';
           _f1TrafoHumCtrl.text = data['f1TrafoHum'] ?? '0';
 
           _f2BattTempCtrl.text = data['f2BattTemp'] ?? '0';
@@ -550,9 +519,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
           if (data['rects'] != null) {
             final list = data['rects'] as List<dynamic>;
             for (int i = 0; i < math.min(list.length, _rects.length); i++) {
-              _rects[i].kw.text = list[i]['kw'] ?? '0';
-              _rects[i].volt.text = list[i]['volt'] ?? '0';
-              _rects[i].occ.text = list[i]['occ'] ?? '0';
+              _rects[i].kwCtrl.text = list[i]['kw'] ?? '0';
+              _rects[i].voltCtrl.text = list[i]['volt'] ?? '0';
+              _rects[i].occCtrl.text = list[i]['occ'] ?? '0';
             }
           }
 
@@ -573,7 +542,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
           _f3BattTempCtrl.text = data['f3BattTemp'] ?? '0';
           _f3BattHumCtrl.text = data['f3BattHum'] ?? '0';
-          _f3RectiTempCtrl.text = data['f3RectiTemp'] ?? '0';
+          _f3RectiTempCtrl.text = data['f3RectiHum'] ?? '0';
           _f3RectiHumCtrl.text = data['f3RectiHum'] ?? '0';
           _f3InvasTempCtrl.text = data['f3InvasTemp'] ?? '0';
           _f3InvasHumCtrl.text = data['f3InvasHum'] ?? '0';
@@ -605,9 +574,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
           _f4RectiHumCtrl.text = data['f4RectiHum'] ?? '0';
           _f4BscRncTempCtrl.text = data['f4BscRncTemp'] ?? '0';
           _f4BscRncHumCtrl.text = data['f4BscRncHum'] ?? '0';
-          _f4InterTempCtrl.text = data['f4InterTemp'] ?? '0';
+          _f4InterTempCtrl.text = data['f4InterHum'] ?? '0';
           _f4InterHumCtrl.text = data['f4InterHum'] ?? '0';
-          _f4TransTempCtrl.text = data['f4TransTemp'] ?? '0';
+          _f4TransTempCtrl.text = data['f4TransHum'] ?? '0';
           _f4TransHumCtrl.text = data['f4TransHum'] ?? '0';
 
           _f5UtilATempCtrl.text = data['f5UtilATemp'] ?? '0';
@@ -663,7 +632,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
             child: const Text('Reset ke 0', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -711,12 +680,14 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     super.dispose();
   }
 
-  // --- AMBIL GAMBAR KAMERA ---
+  // --- AMBIL GAMBAR KAMERA (HEMAT PENYIMPANAN) ---
   Future<void> _takePhoto(String title, Function(XFile) onSaved) async {
     try {
       final XFile? photo = await _picker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 85,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 60,
       );
       if (photo != null) {
         setState(() {
@@ -737,7 +708,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     }
   }
 
-  // --- HELPER DECODE FILE KE UI.IMAGE ---
   Future<ui.Image> _loadUiImage(File file) async {
     final bytes = await file.readAsBytes();
     final codec = await ui.instantiateImageCodec(bytes);
@@ -745,7 +715,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     return frame.image;
   }
 
-  // --- HELPER GAMBAR BOXFIT.COVER PADA CANVAS ---
   void _drawPhotoOnCanvas(Canvas canvas, ui.Image? img, Rect dst, String title) {
     if (img != null) {
       final double imgW = img.width.toDouble();
@@ -772,11 +741,11 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       final textPainter = TextPainter(
         text: TextSpan(
           text: '$title\n(Belum Ada Foto)',
-          style: const TextStyle(color: Colors.white70, fontSize: 24, fontWeight: FontWeight.bold),
+          style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         textAlign: TextAlign.center,
         textDirection: TextDirection.ltr,
-      )..layout(maxWidth: dst.width - 20);
+      )..layout(maxWidth: dst.width - 16);
 
       textPainter.paint(
         canvas,
@@ -789,14 +758,13 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     final borderPaint = Paint()
       ..color = Colors.white
-      ..strokeWidth = 4.0
+      ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke;
     canvas.drawRect(dst, borderPaint);
   }
 
-  // --- FUNGSI DOWNLOAD KOLASE & VALIDASI KELENGKAPAN FOTO ---
+  // --- DOWNLOAD KOLASE DENGAN NOTIFIKASI & RESOLUSI 720P RINGAN ---
   Future<void> _downloadSingleCollage(int index) async {
-    // 1. Cek ketersediaan foto sebelum memproses
     if (index == 1) {
       final missing = <String>[];
       if (_fotoKwh == null) missing.add('KWH Meter');
@@ -809,7 +777,8 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.red,
-            content: Text('Belum ada foto yang diambil! Silakan ambil foto KWH Meter & LVMDP di Tab 1.'),
+            duration: Duration(seconds: 4),
+            content: Text('Foto belum tersedia! Silakan ambil foto KWH Meter & LVMDP di Tab 1.'),
           ),
         );
         return;
@@ -824,7 +793,8 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.red,
-            content: Text('Belum ada foto yang diambil! Silakan ambil foto SMU Genset 1, 2, dan 3 di Tab 1.'),
+            duration: Duration(seconds: 4),
+            content: Text('Foto belum tersedia! Silakan ambil foto SMU Genset 1, 2, dan 3 di Tab 1.'),
           ),
         );
         return;
@@ -834,7 +804,8 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.red,
-            content: Text('Belum ada foto yang diambil! Silakan ambil Foto Suhu dan Tablet Containment di Tab 5.'),
+            duration: Duration(seconds: 4),
+            content: Text('Foto belum tersedia! Silakan ambil Foto Suhu dan Tablet Containment di Tab 5.'),
           ),
         );
         return;
@@ -843,7 +814,10 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     String collageName = '';
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sedang menyusun gambar kolase...')),
+      const SnackBar(
+        duration: Duration(seconds: 1),
+        content: Text('Sedang menyusun dan mengunduh kolase...'),
+      ),
     );
 
     try {
@@ -852,55 +826,50 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
       if (index == 1) {
         collageName = 'Kolase 1 (KWH & LVMDP)';
-        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 1080, 1350));
+        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 720, 900));
         final imgKwh = _fotoKwh != null ? await _loadUiImage(File(_fotoKwh!.path)) : null;
         final imgArus = _fotoLvmdpArus != null ? await _loadUiImage(File(_fotoLvmdpArus!.path)) : null;
         final imgPqs = _fotoLvmdpPqs != null ? await _loadUiImage(File(_fotoLvmdpPqs!.path)) : null;
         final imgVolt = _fotoLvmdpVolt != null ? await _loadUiImage(File(_fotoLvmdpVolt!.path)) : null;
         final imgFreq = _fotoLvmdpFreq != null ? await _loadUiImage(File(_fotoLvmdpFreq!.path)) : null;
 
-        // Baris 1: KWH & Arus
-        _drawPhotoOnCanvas(canvas, imgKwh, const Rect.fromLTWH(0, 0, 540, 675), 'KWH Meter');
-        _drawPhotoOnCanvas(canvas, imgArus, const Rect.fromLTWH(540, 0, 540, 675), 'Arus LVMDP');
+        _drawPhotoOnCanvas(canvas, imgKwh, const Rect.fromLTWH(0, 0, 360, 450), 'KWH Meter');
+        _drawPhotoOnCanvas(canvas, imgArus, const Rect.fromLTWH(360, 0, 360, 450), 'Arus LVMDP');
 
-        // Baris 2: PQS, Voltage, Freq
-        _drawPhotoOnCanvas(canvas, imgPqs, const Rect.fromLTWH(0, 675, 360, 675), 'PQS LVMDP');
-        _drawPhotoOnCanvas(canvas, imgVolt, const Rect.fromLTWH(360, 675, 360, 675), 'Voltage LVMDP');
-        _drawPhotoOnCanvas(canvas, imgFreq, const Rect.fromLTWH(720, 675, 360, 675), 'Freq LVMDP');
+        _drawPhotoOnCanvas(canvas, imgPqs, const Rect.fromLTWH(0, 450, 240, 450), 'PQS LVMDP');
+        _drawPhotoOnCanvas(canvas, imgVolt, const Rect.fromLTWH(240, 450, 240, 450), 'Voltage LVMDP');
+        _drawPhotoOnCanvas(canvas, imgFreq, const Rect.fromLTWH(480, 450, 240, 450), 'Freq LVMDP');
 
         final pic = recorder.endRecording();
-        final img = await pic.toImage(1080, 1350);
+        final img = await pic.toImage(720, 900);
         final bd = await img.toByteData(format: ui.ImageByteFormat.png);
         pngBytes = bd?.buffer.asUint8List();
       } else if (index == 2) {
         collageName = 'Kolase 2 (SMU Genset)';
-        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 1080, 1080));
+        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 720, 720));
         final imgG1 = _fotoSmuGenset1 != null ? await _loadUiImage(File(_fotoSmuGenset1!.path)) : null;
         final imgG2 = _fotoSmuGenset2 != null ? await _loadUiImage(File(_fotoSmuGenset2!.path)) : null;
         final imgG3 = _fotoSmuGenset3 != null ? await _loadUiImage(File(_fotoSmuGenset3!.path)) : null;
 
-        // Atas: Genset 1 Lebar Penuh
-        _drawPhotoOnCanvas(canvas, imgG1, const Rect.fromLTWH(0, 0, 1080, 540), 'SMU Genset 01');
-
-        // Bawah: Genset 2 & Genset 3
-        _drawPhotoOnCanvas(canvas, imgG2, const Rect.fromLTWH(0, 540, 540, 540), 'SMU Genset 02');
-        _drawPhotoOnCanvas(canvas, imgG3, const Rect.fromLTWH(540, 540, 540, 540), 'SMU Genset 03');
+        _drawPhotoOnCanvas(canvas, imgG1, const Rect.fromLTWH(0, 0, 720, 360), 'SMU Genset 01');
+        _drawPhotoOnCanvas(canvas, imgG2, const Rect.fromLTWH(0, 360, 360, 360), 'SMU Genset 02');
+        _drawPhotoOnCanvas(canvas, imgG3, const Rect.fromLTWH(360, 360, 360, 360), 'SMU Genset 03');
 
         final pic = recorder.endRecording();
-        final img = await pic.toImage(1080, 1080);
+        final img = await pic.toImage(720, 720);
         final bd = await img.toByteData(format: ui.ImageByteFormat.png);
         pngBytes = bd?.buffer.asUint8List();
       } else {
         collageName = 'Kolase 3 (Containment)';
-        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 1080, 720));
+        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 720, 480));
         final imgTab = _fotoContainmentTablet != null ? await _loadUiImage(File(_fotoContainmentTablet!.path)) : null;
         final imgSuhu = _fotoContainmentSuhu != null ? await _loadUiImage(File(_fotoContainmentSuhu!.path)) : null;
 
-        _drawPhotoOnCanvas(canvas, imgTab, const Rect.fromLTWH(0, 0, 540, 720), 'Tablet Containment');
-        _drawPhotoOnCanvas(canvas, imgSuhu, const Rect.fromLTWH(540, 0, 540, 720), 'Suhu Containment');
+        _drawPhotoOnCanvas(canvas, imgTab, const Rect.fromLTWH(0, 0, 360, 480), 'Tablet Containment');
+        _drawPhotoOnCanvas(canvas, imgSuhu, const Rect.fromLTWH(360, 0, 360, 480), 'Suhu Containment');
 
         final pic = recorder.endRecording();
-        final img = await pic.toImage(1080, 720);
+        final img = await pic.toImage(720, 480);
         final bd = await img.toByteData(format: ui.ImageByteFormat.png);
         pngBytes = bd?.buffer.asUint8List();
       }
@@ -926,7 +895,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '$collageName berhasil di-download & tersimpan di Galeri!',
+                      '$collageName berhasil disimpan ke Galeri HP!',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -945,41 +914,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     }
   }
 
-  // --- RUMUS TANGKI SILINDER HORIZONTAL ---
-  static double calculateHorizontalTankVolume({
-    required double lengthCm,
-    required double diameterCm,
-    required double heightCm,
-  }) {
-    if (heightCm <= 0) return 0.0;
-    final r = diameterCm / 2.0;
-
-    if (heightCm >= diameterCm) {
-      return (math.pi * r * r * lengthCm) / 1000.0;
-    }
-
-    final h = heightCm;
-    final term1 = r * r * math.acos((r - h) / r);
-    final term2 = (r - h) * math.sqrt(2.0 * r * h - (h * h));
-    final area = term1 - term2;
-
-    return (area * lengthCm) / 1000.0;
-  }
-
-  void _calculateBbmFromHeight(
-      String heightStr, double panjang, double diameter, TextEditingController targetCtrl) {
-    final height = double.tryParse(heightStr);
-    if (height != null && height >= 0) {
-      final liter = calculateHorizontalTankVolume(
-        lengthCm: panjang,
-        diameterCm: diameter,
-        heightCm: height,
-      ).round();
-      targetCtrl.text = liter.toString();
-    }
-    _recalculateTotalBbm();
-  }
-
   void _recalculateTotalBbm() {
     final b1 = double.tryParse(_bbmB1LiterCtrl.text.replaceAll('.', '')) ?? 0;
     final b2 = double.tryParse(_bbmB2LiterCtrl.text.replaceAll('.', '')) ?? 0;
@@ -994,6 +928,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     final hours = total > 0 ? (total / 134).round() : 0;
     final days = (hours / 24).floor();
     _backupTimeCtrl.text = '$hours Jam/$days Hari';
+    _saveFormData();
   }
 
   List<String> _validateBbmLimits() {
@@ -1072,7 +1007,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     verify('kwh', 'KWH Meter', _kwhCtrl.text);
 
-    // Status Perangkat Failed (Boleh sama, tetap diperingatkan jika 0)
     verify('failedGenset', 'Perangkat Failed: Genset', _failedGensetCtrl.text, allowSame: true);
     verify('failedPac', 'Perangkat Failed: PAC', _failedPacCtrl.text, allowSame: true);
     verify('failedRecti', 'Perangkat Failed: Rectifier', _failedRectiCtrl.text, allowSame: true);
@@ -1101,7 +1035,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     verify('voltGenset3', 'Genset 03: Baterai Volt', _voltGenset3Ctrl.text);
     verify('suhuGenset3', 'Genset 03: Suhu', _suhuGenset3Ctrl.text);
 
-    // BBM: Volume Boleh sama, tapi wajib tidak boleh 0
     verify('bbmB1Liter', 'Volume Tangki Bulanan 1', _bbmB1LiterCtrl.text, allowSame: true);
     verify('bbmB2Liter', 'Volume Tangki Bulanan 2', _bbmB2LiterCtrl.text, allowSame: true);
     verify('bbmB3Liter', 'Volume Tangki Bulanan 3', _bbmB3LiterCtrl.text, allowSame: true);
@@ -1155,9 +1088,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     for (int i = 0; i < _rects.length; i++) {
       final num = (i + 1).toString().padLeft(2, '0');
-      verify('rect_${i}_kw', 'Rect. $num Load (KW)', _rects[i].kw.text);
-      verify('rect_${i}_volt', 'Rect. $num Voltage', _rects[i].volt.text);
-      verify('rect_${i}_occ', 'Rect. $num Occupancy', _rects[i].occ.text);
+      verify('rect_${i}_kw', 'Rect. $num Load (KW)', _rects[i].kwCtrl.text);
+      verify('rect_${i}_volt', 'Rect. $num Voltage', _rects[i].voltCtrl.text);
+      verify('rect_${i}_occ', 'Rect. $num Occupancy', _rects[i].occCtrl.text);
     }
 
     void checkUps(String code, UpsData ups) {
@@ -1326,7 +1259,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
                 Navigator.of(ctx).pop();
                 _executeGenerateReport();
               },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E88E5)),
+              style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
               child: const Text('Tetap Generate & Kirim', style: TextStyle(color: Colors.white)),
             ),
           ],
@@ -1444,19 +1377,19 @@ R. Data center: ${_f5DcTempCtrl.text}°C/${_f5DcHumCtrl.text}%
 
 Checklist Rectifier
 DIVCE/VOLTAGE/ LOAD
-Rect. 01 HUAWEI : ${_rects[0].kw.text} kw/${_rects[0].volt.text} V/${_rects[0].occ.text}%
-Rect. 02 HUAWEI : ${_rects[1].kw.text} kw/${_rects[1].volt.text} V/${_rects[1].occ.text}%
-Rect. 03 HUAWEI : ${_rects[2].kw.text} kw/${_rects[2].volt.text} V/${_rects[2].occ.text}%
-Rect. 04 HUAWEI : ${_rects[3].kw.text} kw/${_rects[3].volt.text} V/${_rects[3].occ.text}%
-Rect. 05 HUAWEI : ${_rects[4].kw.text} kw/${_rects[4].volt.text} V/${_rects[4].occ.text}%
-Rect. 06 HUAWEI : ${_rects[5].kw.text} kw/${_rects[5].volt.text} V/${_rects[5].occ.text}%
-Rect. 07 HUAWEI : ${_rects[6].kw.text} kw/${_rects[6].volt.text} V/${_rects[6].occ.text}%
-Rect. 08 HUAWEI : ${_rects[7].kw.text} kw/${_rects[7].volt.text} V/${_rects[7].occ.text}%
-Rect. 09 HUAWEI : ${_rects[8].kw.text} kw/${_rects[8].volt.text} V/${_rects[8].occ.text}%
-Rect. 10 HUAWEI : ${_rects[9].kw.text} kw/${_rects[9].volt.text} V/${_rects[9].occ.text}%
-Rect. 11 HUAWEI : ${_rects[10].kw.text} kw/${_rects[10].volt.text} V/${_rects[10].occ.text}%
-Rect. 12 HUAWEI : ${_rects[11].kw.text} kw/${_rects[11].volt.text} V/${_rects[11].occ.text}%
-Rect. 13 HUAWEI : ${_rects[12].kw.text} kw/${_rects[12].volt.text} V/${_rects[12].occ.text}%
+Rect. 01 HUAWEI : ${_rects[0].kwCtrl.text} kw/${_rects[0].voltCtrl.text} V/${_rects[0].occCtrl.text}%
+Rect. 02 HUAWEI : ${_rects[1].kwCtrl.text} kw/${_rects[1].voltCtrl.text} V/${_rects[1].occCtrl.text}%
+Rect. 03 HUAWEI : ${_rects[2].kwCtrl.text} kw/${_rects[2].voltCtrl.text} V/${_rects[2].occCtrl.text}%
+Rect. 04 HUAWEI : ${_rects[3].kwCtrl.text} kw/${_rects[3].voltCtrl.text} V/${_rects[3].occCtrl.text}%
+Rect. 05 HUAWEI : ${_rects[4].kwCtrl.text} kw/${_rects[4].voltCtrl.text} V/${_rects[4].occCtrl.text}%
+Rect. 06 HUAWEI : ${_rects[5].kwCtrl.text} kw/${_rects[5].voltCtrl.text} V/${_rects[5].occCtrl.text}%
+Rect. 07 HUAWEI : ${_rects[6].kwCtrl.text} kw/${_rects[6].voltCtrl.text} V/${_rects[6].occCtrl.text}%
+Rect. 08 HUAWEI : ${_rects[7].kwCtrl.text} kw/${_rects[7].voltCtrl.text} V/${_rects[7].occCtrl.text}%
+Rect. 09 HUAWEI : ${_rects[8].kwCtrl.text} kw/${_rects[8].voltCtrl.text} V/${_rects[8].occCtrl.text}%
+Rect. 10 HUAWEI : ${_rects[9].kwCtrl.text} kw/${_rects[9].voltCtrl.text} V/${_rects[9].occCtrl.text}%
+Rect. 11 HUAWEI : ${_rects[10].kwCtrl.text} kw/${_rects[10].voltCtrl.text} V/${_rects[10].occCtrl.text}%
+Rect. 12 HUAWEI : ${_rects[11].kwCtrl.text} kw/${_rects[11].voltCtrl.text} V/${_rects[11].occCtrl.text}%
+Rect. 13 HUAWEI : ${_rects[12].kwCtrl.text} kw/${_rects[12].voltCtrl.text} V/${_rects[12].occCtrl.text}%
 
 Update UPS
 UPS 2.02 Eaton 100 KVA : ${_ups202.kw.text} KW/${_ups202.occ.text}%
@@ -1546,64 +1479,65 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final isKeyboardOpen = bottomInset > 0;
-
-    return FScaffold(
-      header: FHeader.nested(
-        title: const Text('Checklist TTC Sudiang'),
-        prefixes: [
-          FHeaderAction.back(
-            onPress: () => Navigator.of(context).pop(),
-          ),
-        ],
-        suffixes: [
-          FHeaderAction(
-            icon: const Icon(Icons.refresh, size: 20),
-            onPress: _resetForm,
-          ),
-        ],
-      ),
-      // POSISI BILAH NAVIGASI: Menggunakan footer bawaan FScaffold (Otomatis pas di atas keyboard)
-      footer: Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          4,
-          16,
-          isKeyboardOpen ? 4.0 : math.max(10.0, bottomPadding),
-        ),
-        child: _buildFloatingPillBar(),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: IndexedStack(
-          index: _currentTab,
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
           children: [
-            _buildTab1(),
-            _buildTab2(),
-            _buildTab3(),
-            _buildTab4(),
-            _buildTab5(),
-            _buildTabReport(),
+            FHeader.nested(
+              title: const Text('Checklist TTC Sudiang'),
+              prefixes: [
+                FHeaderAction.back(
+                  onPress: () => Navigator.of(context).pop(),
+                ),
+              ],
+              suffixes: [
+                FHeaderAction(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPress: _resetForm,
+                ),
+              ],
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: _currentTab,
+                children: [
+                  _buildTab1(),
+                  _buildTab2(),
+                  _buildTab3(),
+                  _buildTab4(),
+                  _buildTab5(),
+                  _buildTabReport(),
+                ],
+              ),
+            ),
           ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          height: 48,
+          margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: _buildFloatingPillBar(),
         ),
       ),
     );
   }
 
-  // --- FLOATING PILL BAR ---
   Widget _buildFloatingPillBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
         border: Border.all(color: Colors.grey.shade300),
@@ -1618,18 +1552,17 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
                 FocusScope.of(context).unfocus();
                 setState(() => _currentTab = index);
               },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Container(
+                height: 40,
                 decoration: BoxDecoration(
-                  color: isSelected ? Colors.black : Colors.transparent,
+                  color: isSelected ? primaryRed : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   _tabs[index],
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12.5,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     color: isSelected ? Colors.white : Colors.black87,
                   ),
@@ -1650,21 +1583,11 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 10),
           ...children,
         ],
@@ -1672,405 +1595,59 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
     );
   }
 
-  Widget _buildUnitField({
-    required String label,
-    required TextEditingController controller,
-    required String unit,
-    bool enabled = true,
-    bool isError = false,
-    TextInputType keyboardType = const TextInputType.numberWithOptions(decimal: true),
-    void Function(String)? onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (label.isNotEmpty) ...[
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isError ? Colors.red.shade700 : Colors.black87,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 3),
-          ],
-          Container(
-            height: 38,
-            decoration: BoxDecoration(
-              color: isError
-                  ? Colors.red.shade50
-                  : (enabled ? Colors.white : Colors.grey.shade100),
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(
-                color: isError ? Colors.red : Colors.grey.shade300,
-                width: isError ? 1.5 : 1.0,
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: controller,
-                    enabled: enabled,
-                    keyboardType: keyboardType,
-                    onChanged: (val) {
-                      if (onChanged != null) onChanged(val);
-                      _saveFormData();
-                    },
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: isError ? Colors.red.shade900 : Colors.black87,
-                      fontWeight: isError ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                    ),
-                  ),
-                ),
-                Container(
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  decoration: BoxDecoration(
-                    color: isError ? Colors.red.shade200 : Colors.grey.shade300,
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(6),
-                      bottomRight: Radius.circular(6),
-                    ),
-                  ),
-                  child: Text(
-                    unit,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isError ? Colors.red.shade900 : Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTwoRoomsRow({
-    required String room1Name,
-    required TextEditingController temp1Ctrl,
-    required TextEditingController hum1Ctrl,
-    String? room2Name,
-    TextEditingController? temp2Ctrl,
-    TextEditingController? hum2Ctrl,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  room1Name,
-                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(child: _buildUnitField(label: '', controller: temp1Ctrl, unit: '°C')),
-                    const SizedBox(width: 4),
-                    Expanded(child: _buildUnitField(label: '', controller: hum1Ctrl, unit: '%')),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: (room2Name != null && temp2Ctrl != null && hum2Ctrl != null)
-                ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  room2Name,
-                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(child: _buildUnitField(label: '', controller: temp2Ctrl, unit: '°C')),
-                    const SizedBox(width: 4),
-                    Expanded(child: _buildUnitField(label: '', controller: hum2Ctrl, unit: '%')),
-                  ],
-                ),
-              ],
-            )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRectiRow(String name, RectData data) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(name, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: _buildUnitField(label: 'Load', controller: data.kw, unit: 'KW'),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _buildUnitField(label: 'Voltage', controller: data.volt, unit: 'V'),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _buildUnitField(label: 'Occupancy', controller: data.occ, unit: '%'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUpsCard(String title, UpsData data) {
-    return _buildCard(
-      title: title,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildUnitField(label: 'Load', controller: data.kw, unit: 'KW'),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildUnitField(label: 'Occupancy', controller: data.occ, unit: '%'),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: _buildUnitField(label: 'Battery Volt', controller: data.volt, unit: 'V'),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _buildUnitField(label: 'Battery %', controller: data.pct, unit: '%'),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _buildUnitField(label: 'Est. Runtime', controller: data.runtime, unit: 'min'),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // --- TAB 1 ---
+  // --- TAB 1 (KOMPONEN MODULAR) ---
   Widget _buildTab1() {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
-        _buildCard(
+        PowerSourceCard(
           title: 'Power Source & Trafo',
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Status PLN',
-                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Container(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(7),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _statusPln,
-                            isExpanded: true,
-                            items: const [
-                              DropdownMenuItem(value: 'ON', child: Text('ON', style: TextStyle(fontSize: 13))),
-                              DropdownMenuItem(value: 'OFF', child: Text('OFF', style: TextStyle(fontSize: 13))),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _statusPln = val);
-                                _saveFormData();
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildUnitField(label: 'KWH Meter', controller: _kwhCtrl, unit: 'KWH'),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildUnitField(
-                    label: 'Cap. Trafo',
-                    controller: TextEditingController(text: '2000'),
-                    unit: 'KVA',
-                    enabled: false,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            OutlinedButton.icon(
-              onPressed: () => _takePhoto('KWH & Trafo', (f) => _fotoKwh = f),
-              icon: Icon(
-                _fotoKwh != null ? Icons.check_circle : Icons.camera_alt_outlined,
-                size: 18,
-                color: _fotoKwh != null ? Colors.green : null,
-              ),
-              label: Text(_fotoKwh != null ? 'Foto KWH Tersimpan (Ambil Ulang)' : 'Ambil Foto KWH & Trafo'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(40),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-          ],
+          statusPln: _statusPln,
+          kwhController: _kwhCtrl,
+          capTrafo: '2000',
+          savedPhoto: _fotoKwh,
+          onStatusChanged: (val) {
+            if (val != null) {
+              setState(() => _statusPln = val);
+              _saveFormData();
+            }
+          },
+          onPhotoPressed: () => _takePhoto('KWH & Trafo', (f) => _fotoKwh = f),
         ),
-
-        _buildCard(
-          title: 'Status Perangkat Failed',
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildUnitField(
-                    label: 'Genset',
-                    controller: _failedGensetCtrl,
-                    unit: '/3',
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _buildUnitField(
-                    label: 'PAC',
-                    controller: _failedPacCtrl,
-                    unit: '/52',
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _buildUnitField(
-                    label: 'Rectifier',
-                    controller: _failedRectiCtrl,
-                    unit: '/13',
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _buildUnitField(
-                    label: 'UPS',
-                    controller: _failedUpsCtrl,
-                    unit: '/7',
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-              ],
-            ),
-          ],
+        FailedDevicesCard(
+          gensetCtrl: _failedGensetCtrl,
+          pacCtrl: _failedPacCtrl,
+          rectiCtrl: _failedRectiCtrl,
+          upsCtrl: _failedUpsCtrl,
+          totalGenset: '/3',
+          totalPac: '/52',
+          totalRecti: '/13',
+          totalUps: '/7',
         ),
-
-        _buildCard(
-          title: 'Update Panel LVMDP',
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildLvmdpPhotoButton('PQS', _fotoLvmdpPqs, (f) => _fotoLvmdpPqs = f),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _buildLvmdpPhotoButton('Arus', _fotoLvmdpArus, (f) => _fotoLvmdpArus = f),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _buildLvmdpPhotoButton('Voltage', _fotoLvmdpVolt, (f) => _fotoLvmdpVolt = f),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _buildLvmdpPhotoButton('Freq', _fotoLvmdpFreq, (f) => _fotoLvmdpFreq = f),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(child: _buildUnitField(label: 'KVA', controller: _lvmdpKvaCtrl, unit: 'KVA')),
-                const SizedBox(width: 8),
-                Expanded(child: _buildUnitField(label: 'KW', controller: _lvmdpKwCtrl, unit: 'KW')),
-                const SizedBox(width: 8),
-                Expanded(child: _buildUnitField(label: 'Cos Phi', controller: _lvmdpCosPhiCtrl, unit: 'φ')),
-              ],
-            ),
-            const Text('Tegangan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(child: _buildUnitField(label: 'R-S', controller: _lvmdpRsCtrl, unit: 'V')),
-                const SizedBox(width: 8),
-                Expanded(child: _buildUnitField(label: 'S-N', controller: _lvmdpSnCtrl, unit: 'V')),
-              ],
-            ),
-            Row(
-              children: [
-                Expanded(child: _buildUnitField(label: 'T-N', controller: _lvmdpTnCtrl, unit: 'V')),
-                const SizedBox(width: 8),
-                Expanded(child: _buildUnitField(label: 'N-G', controller: _lvmdpNgCtrl, unit: 'V')),
-              ],
-            ),
-            const Text('Arus:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(child: _buildUnitField(label: 'R', controller: _lvmdpArusRCtrl, unit: 'A')),
-                const SizedBox(width: 6),
-                Expanded(child: _buildUnitField(label: 'S', controller: _lvmdpArusSCtrl, unit: 'A')),
-                const SizedBox(width: 6),
-                Expanded(child: _buildUnitField(label: 'T', controller: _lvmdpArusTCtrl, unit: 'A')),
-              ],
-            ),
-          ],
+        LvmdpCard(
+          kvaCtrl: _lvmdpKvaCtrl,
+          kwCtrl: _lvmdpKwCtrl,
+          cosPhiCtrl: _lvmdpCosPhiCtrl,
+          rsCtrl: _lvmdpRsCtrl,
+          snCtrl: _lvmdpSnCtrl,
+          tnCtrl: _lvmdpTnCtrl,
+          ngCtrl: _lvmdpNgCtrl,
+          arusRCtrl: _lvmdpArusRCtrl,
+          arusSCtrl: _lvmdpArusSCtrl,
+          arusTCtrl: _lvmdpArusTCtrl,
+          fotoPqs: _fotoLvmdpPqs,
+          fotoArus: _fotoLvmdpArus,
+          fotoVolt: _fotoLvmdpVolt,
+          fotoFreq: _fotoLvmdpFreq,
+          onPhotoPqs: () => _takePhoto('PQS LVMDP', (f) => _fotoLvmdpPqs = f),
+          onPhotoArus: () => _takePhoto('Arus LVMDP', (f) => _fotoLvmdpArus = f),
+          onPhotoVolt: () => _takePhoto('Voltage LVMDP', (f) => _fotoLvmdpVolt = f),
+          onPhotoFreq: () => _takePhoto('Freq LVMDP', (f) => _fotoLvmdpFreq = f),
         ),
-
         _buildCard(
           title: 'Update Status Genset',
           children: [
-            _buildGensetItem(
+            GensetCard(
               title: 'Genset 01 (750 KVA)',
               modeValue: _genset1Mode,
               onModeChanged: (val) {
@@ -2083,10 +1660,10 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
               voltCtrl: _voltGenset1Ctrl,
               suhuCtrl: _suhuGenset1Ctrl,
               savedPhoto: _fotoSmuGenset1,
-              onPhotoSaved: (f) => _fotoSmuGenset1 = f,
+              onPhotoPressed: () => _takePhoto('SMU Genset 01', (f) => _fotoSmuGenset1 = f),
             ),
-            const Divider(height: 24),
-            _buildGensetItem(
+            const Divider(height: 20),
+            GensetCard(
               title: 'Genset 02 (1000 KVA)',
               modeValue: _genset2Mode,
               onModeChanged: (val) {
@@ -2099,10 +1676,10 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
               voltCtrl: _voltGenset2Ctrl,
               suhuCtrl: _suhuGenset2Ctrl,
               savedPhoto: _fotoSmuGenset2,
-              onPhotoSaved: (f) => _fotoSmuGenset2 = f,
+              onPhotoPressed: () => _takePhoto('SMU Genset 02', (f) => _fotoSmuGenset2 = f),
             ),
-            const Divider(height: 24),
-            _buildGensetItem(
+            const Divider(height: 20),
+            GensetCard(
               title: 'Genset 03 (750 KVA)',
               modeValue: _genset3Mode,
               onModeChanged: (val) {
@@ -2115,234 +1692,36 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
               voltCtrl: _voltGenset3Ctrl,
               suhuCtrl: _suhuGenset3Ctrl,
               savedPhoto: _fotoSmuGenset3,
-              onPhotoSaved: (f) => _fotoSmuGenset3 = f,
+              onPhotoPressed: () => _takePhoto('SMU Genset 03', (f) => _fotoSmuGenset3 = f),
             ),
           ],
         ),
-
-        // Update BBM
         _buildCard(
           title: 'Update BBM (Tangki Silinder Horizontal)',
           children: [
-            _buildTankRow('Tangki Bulanan 1 (11.662)', _bbmB1TinggiCtrl, _bbmB1LiterCtrl, _tB1Panjang, _tB1Diameter, _maxHeightB1, _maxLiterB1),
-            _buildTankRow('Tangki Bulanan 2 (10.000)', _bbmB2TinggiCtrl, _bbmB2LiterCtrl, _tB23Panjang, _tB23Diameter, _maxHeightB23, _maxLiterB23),
-            _buildTankRow('Tangki Bulanan 3 (10.000)', _bbmB3TinggiCtrl, _bbmB3LiterCtrl, _tB23Panjang, _tB23Diameter, _maxHeightB23, _maxLiterB23),
-            _buildTankRow('Tangki Harian 1 (1.500)', _bbmH1TinggiCtrl, _bbmH1LiterCtrl, _tH12Panjang, _tH12Diameter, _maxHeightH12, _maxLiterH12),
-            _buildTankRow('Tangki Harian 2 (1.500)', _bbmH2TinggiCtrl, _bbmH2LiterCtrl, _tH12Panjang, _tH12Diameter, _maxHeightH12, _maxLiterH12),
+            TankCard(tankName: 'Tangki Bulanan 1 (11.662)', tinggiCtrl: _bbmB1TinggiCtrl, literCtrl: _bbmB1LiterCtrl, panjang: _tB1Panjang, diameter: _tB1Diameter, maxHeight: _maxHeightB1, maxLiter: _maxLiterB1, onValueChanged: _recalculateTotalBbm),
+            TankCard(tankName: 'Tangki Bulanan 2 (10.000)', tinggiCtrl: _bbmB2TinggiCtrl, literCtrl: _bbmB2LiterCtrl, panjang: _tB23Panjang, diameter: _tB23Diameter, maxHeight: _maxHeightB23, maxLiter: _maxLiterB23, onValueChanged: _recalculateTotalBbm),
+            TankCard(tankName: 'Tangki Bulanan 3 (10.000)', tinggiCtrl: _bbmB3TinggiCtrl, literCtrl: _bbmB3LiterCtrl, panjang: _tB23Panjang, diameter: _tB23Diameter, maxHeight: _maxHeightB23, maxLiter: _maxLiterB23, onValueChanged: _recalculateTotalBbm),
+            TankCard(tankName: 'Tangki Harian 1 (1.500)', tinggiCtrl: _bbmH1TinggiCtrl, literCtrl: _bbmH1LiterCtrl, panjang: _tH12Panjang, diameter: _tH12Diameter, maxHeight: _maxHeightH12, maxLiter: _maxLiterH12, onValueChanged: _recalculateTotalBbm),
+            TankCard(tankName: 'Tangki Harian 2 (1.500)', tinggiCtrl: _bbmH2TinggiCtrl, literCtrl: _bbmH2LiterCtrl, panjang: _tH12Panjang, diameter: _tH12Diameter, maxHeight: _maxHeightH12, maxLiter: _maxLiterH12, onValueChanged: _recalculateTotalBbm),
             const Divider(),
             Row(
               children: [
-                Expanded(
-                  child: _buildUnitField(label: 'Total Solar', controller: _totalSolarCtrl, unit: 'L', enabled: false),
-                ),
+                Expanded(child: UnitInputField(label: 'Total Solar', controller: _totalSolarCtrl, unit: 'L', enabled: false)),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _buildUnitField(label: 'Backup Time', controller: _backupTimeCtrl, unit: 'Jam', enabled: false, keyboardType: TextInputType.text),
-                ),
+                Expanded(child: UnitInputField(label: 'Backup Time', controller: _backupTimeCtrl, unit: 'Jam', enabled: false, keyboardType: TextInputType.text)),
               ],
             ),
           ],
         ),
-
-        _buildCard(
+        RoomTempCard(
           title: 'Suhu AC Ruang Perangkat Floor #1',
-          children: [
-            _buildTwoRoomsRow(
-              room1Name: 'R. Genset',
-              temp1Ctrl: _f1GensetTempCtrl,
-              hum1Ctrl: _f1GensetHumCtrl,
-              room2Name: 'R. Trafo',
-              temp2Ctrl: _f1TrafoTempCtrl,
-              hum2Ctrl: _f1TrafoHumCtrl,
-            ),
+          rooms: [
+            RoomTempItem(name: 'R. Genset', tempCtrl: _f1GensetTempCtrl, humCtrl: _f1GensetHumCtrl),
+            RoomTempItem(name: 'R. Trafo', tempCtrl: _f1TrafoTempCtrl, humCtrl: _f1TrafoHumCtrl),
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildLvmdpPhotoButton(String title, XFile? photo, Function(XFile) onSaved) {
-    final hasPhoto = photo != null;
-    return OutlinedButton(
-      onPressed: () => _takePhoto(title, onSaved),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
-        side: BorderSide(color: hasPhoto ? Colors.green : Colors.grey.shade400),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(hasPhoto ? Icons.check_circle : Icons.camera_alt_outlined,
-              size: 16, color: hasPhoto ? Colors.green : null),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-              color: hasPhoto ? Colors.green.shade800 : null,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGensetItem({
-    required String title,
-    required String modeValue,
-    required ValueChanged<String?> onModeChanged,
-    required TextEditingController smuCtrl,
-    required TextEditingController voltCtrl,
-    required TextEditingController suhuCtrl,
-    required XFile? savedPhoto,
-    required Function(XFile) onPhotoSaved,
-  }) {
-    final hasPhoto = savedPhoto != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              flex: 4,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Mode', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Container(
-                    height: 38,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(7),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: modeValue,
-                        isExpanded: true,
-                        items: const [
-                          DropdownMenuItem(value: 'Standby Auto', child: Text('Standby Auto', style: TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: 'ON', child: Text('ON', style: TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: 'OFF', child: Text('OFF', style: TextStyle(fontSize: 12))),
-                        ],
-                        onChanged: onModeChanged,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 4,
-              child: _buildUnitField(label: 'SMU', controller: smuCtrl, unit: 'Hrs'),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: _buildUnitField(label: 'Baterai Volt', controller: voltCtrl, unit: 'V'),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildUnitField(label: 'Suhu Genset', controller: suhuCtrl, unit: '°C'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        OutlinedButton.icon(
-          onPressed: () => _takePhoto('SMU $title', onPhotoSaved),
-          icon: Icon(hasPhoto ? Icons.check_circle : Icons.camera_alt_outlined,
-              size: 16, color: hasPhoto ? Colors.green : null),
-          label: Text(
-            hasPhoto ? 'Foto SMU Tersimpan (Ambil Ulang)' : 'Ambil Foto SMU ${title.split(' ')[0]} ${title.split(' ')[1]}',
-            style: TextStyle(color: hasPhoto ? Colors.green.shade800 : null),
-          ),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(36),
-            side: BorderSide(color: hasPhoto ? Colors.green : Colors.grey.shade400),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTankRow(
-      String tankName,
-      TextEditingController tinggiCtrl,
-      TextEditingController literCtrl,
-      double panjang,
-      double diameter,
-      double maxHeight,
-      double maxLiter,
-      ) {
-    final currentHeight = double.tryParse(tinggiCtrl.text) ?? 0.0;
-    final currentLiter = double.tryParse(literCtrl.text.replaceAll('.', '')) ?? 0.0;
-    final isHeightExceeded = currentHeight > maxHeight;
-    final isLiterExceeded = currentLiter > maxLiter;
-    final isAnyExceeded = isHeightExceeded || isLiterExceeded;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(tankName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
-              Text(
-                'Maks: ${maxHeight.toInt()}cm / ${maxLiter.toInt()}L',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isAnyExceeded ? FontWeight.bold : FontWeight.normal,
-                  color: isAnyExceeded ? Colors.red : Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: _buildUnitField(
-                  label: 'Tinggi Sounding',
-                  controller: tinggiCtrl,
-                  unit: 'cm',
-                  isError: isHeightExceeded,
-                  onChanged: (val) {
-                    setState(() {
-                      _calculateBbmFromHeight(val, panjang, diameter, literCtrl);
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildUnitField(
-                  label: 'Isi Volume',
-                  controller: literCtrl,
-                  unit: 'L',
-                  isError: isLiterExceeded,
-                  onChanged: (val) {
-                    setState(() {
-                      _recalculateTotalBbm();
-                    });
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
@@ -2351,40 +1730,35 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
-        _buildCard(
+        RoomTempCard(
           title: 'Suhu Ruang Perangkat Floor #2',
-          children: [
-            _buildTwoRoomsRow(
-              room1Name: 'R. Battery',
-              temp1Ctrl: _f2BattTempCtrl,
-              hum1Ctrl: _f2BattHumCtrl,
-              room2Name: 'R. Rectifier',
-              temp2Ctrl: _f2RectiTempCtrl,
-              hum2Ctrl: _f2RectiHumCtrl,
-            ),
-            _buildTwoRoomsRow(
-              room1Name: 'R. Msc',
-              temp1Ctrl: _f2MscTempCtrl,
-              hum1Ctrl: _f2MscHumCtrl,
-              room2Name: 'R. Csps',
-              temp2Ctrl: _f2CspsTempCtrl,
-              hum2Ctrl: _f2CspsHumCtrl,
-            ),
+          rooms: [
+            RoomTempItem(name: 'R. Battery', tempCtrl: _f2BattTempCtrl, humCtrl: _f2BattHumCtrl),
+            RoomTempItem(name: 'R. Rectifier', tempCtrl: _f2RectiTempCtrl, humCtrl: _f2RectiHumCtrl),
+            RoomTempItem(name: 'R. Msc', tempCtrl: _f2MscTempCtrl, humCtrl: _f2MscHumCtrl),
+            RoomTempItem(name: 'R. Csps', tempCtrl: _f2CspsTempCtrl, humCtrl: _f2CspsHumCtrl),
           ],
         ),
-        _buildCard(
+        RectifierCard(
           title: 'Checklist Rectifier (Rect. 01 - 06 HUAWEI)',
-          children: [
-            _buildRectiRow('Rect. 01 HUAWEI', _rects[0]),
-            _buildRectiRow('Rect. 02 HUAWEI', _rects[1]),
-            _buildRectiRow('Rect. 03 HUAWEI', _rects[2]),
-            _buildRectiRow('Rect. 04 HUAWEI', _rects[3]),
-            _buildRectiRow('Rect. 05 HUAWEI', _rects[4]),
-            _buildRectiRow('Rect. 06 HUAWEI', _rects[5]),
-          ],
+          rectifiers: _rects.sublist(0, 6),
         ),
-        _buildUpsCard('UPS 2.02 Eaton 100 KVA', _ups202),
-        _buildUpsCard('UPS 2.03 Eaton 100 KVA', _ups203),
+        UpsCard(
+          title: 'UPS 2.02 Eaton 100 KVA',
+          kwCtrl: _ups202.kw,
+          occCtrl: _ups202.occ,
+          voltCtrl: _ups202.volt,
+          pctCtrl: _ups202.pct,
+          runtimeCtrl: _ups202.runtime,
+        ),
+        UpsCard(
+          title: 'UPS 2.03 Eaton 100 KVA',
+          kwCtrl: _ups203.kw,
+          occCtrl: _ups203.occ,
+          voltCtrl: _ups203.volt,
+          pctCtrl: _ups203.pct,
+          runtimeCtrl: _ups203.runtime,
+        ),
       ],
     );
   }
@@ -2394,46 +1768,37 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
-        _buildCard(
+        RoomTempCard(
           title: 'Suhu Ruang Perangkat Floor #3',
-          children: [
-            _buildTwoRoomsRow(
-              room1Name: 'R. Battery',
-              temp1Ctrl: _f3BattTempCtrl,
-              hum1Ctrl: _f3BattHumCtrl,
-              room2Name: 'R. Rectifier',
-              temp2Ctrl: _f3RectiTempCtrl,
-              hum2Ctrl: _f3RectiHumCtrl,
-            ),
-            _buildTwoRoomsRow(
-              room1Name: 'R. Invas',
-              temp1Ctrl: _f3InvasTempCtrl,
-              hum1Ctrl: _f3InvasHumCtrl,
-              room2Name: 'R. Core',
-              temp2Ctrl: _f3CoreTempCtrl,
-              hum2Ctrl: _f3CoreHumCtrl,
-            ),
-            _buildTwoRoomsRow(
-              room1Name: 'R. Mkios',
-              temp1Ctrl: _f3MkiosTempCtrl,
-              hum1Ctrl: _f3MkiosHumCtrl,
-              room2Name: 'R. Ocs',
-              temp2Ctrl: _f3OcsTempCtrl,
-              hum2Ctrl: _f3OcsHumCtrl,
-            ),
+          rooms: [
+            RoomTempItem(name: 'R. Battery', tempCtrl: _f3BattTempCtrl, humCtrl: _f3BattHumCtrl),
+            RoomTempItem(name: 'R. Rectifier', tempCtrl: _f3RectiTempCtrl, humCtrl: _f3RectiHumCtrl),
+            RoomTempItem(name: 'R. Invas', tempCtrl: _f3InvasTempCtrl, humCtrl: _f3InvasHumCtrl),
+            RoomTempItem(name: 'R. Core', tempCtrl: _f3CoreTempCtrl, humCtrl: _f3CoreHumCtrl),
+            RoomTempItem(name: 'R. Mkios', tempCtrl: _f3MkiosTempCtrl, humCtrl: _f3MkiosHumCtrl),
+            RoomTempItem(name: 'R. Ocs', tempCtrl: _f3OcsTempCtrl, humCtrl: _f3OcsHumCtrl),
           ],
         ),
-        _buildCard(
+        RectifierCard(
           title: 'Checklist Rectifier (Rect. 07 - 10 HUAWEI)',
-          children: [
-            _buildRectiRow('Rect. 07 HUAWEI', _rects[6]),
-            _buildRectiRow('Rect. 08 HUAWEI', _rects[7]),
-            _buildRectiRow('Rect. 09 HUAWEI', _rects[8]),
-            _buildRectiRow('Rect. 10 HUAWEI', _rects[9]),
-          ],
+          rectifiers: _rects.sublist(6, 10),
         ),
-        _buildUpsCard('UPS 3.01 Eaton 125 KVA', _ups301),
-        _buildUpsCard('UPS 3.02 Eaton 125 KVA', _ups302),
+        UpsCard(
+          title: 'UPS 3.01 Eaton 125 KVA',
+          kwCtrl: _ups301.kw,
+          occCtrl: _ups301.occ,
+          voltCtrl: _ups301.volt,
+          pctCtrl: _ups301.pct,
+          runtimeCtrl: _ups301.runtime,
+        ),
+        UpsCard(
+          title: 'UPS 3.02 Eaton 125 KVA',
+          kwCtrl: _ups302.kw,
+          occCtrl: _ups302.occ,
+          voltCtrl: _ups302.volt,
+          pctCtrl: _ups302.pct,
+          runtimeCtrl: _ups302.runtime,
+        ),
       ],
     );
   }
@@ -2443,39 +1808,19 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
-        _buildCard(
+        RoomTempCard(
           title: 'Suhu Ruang Perangkat Floor #4',
-          children: [
-            _buildTwoRoomsRow(
-              room1Name: 'R. Battery',
-              temp1Ctrl: _f4BattTempCtrl,
-              hum1Ctrl: _f4BattHumCtrl,
-              room2Name: 'R. Rectifier',
-              temp2Ctrl: _f4RectiTempCtrl,
-              hum2Ctrl: _f4RectiHumCtrl,
-            ),
-            _buildTwoRoomsRow(
-              room1Name: 'R. BSC RNC',
-              temp1Ctrl: _f4BscRncTempCtrl,
-              hum1Ctrl: _f4BscRncHumCtrl,
-              room2Name: 'R. Interkoneksi',
-              temp2Ctrl: _f4InterTempCtrl,
-              hum2Ctrl: _f4InterHumCtrl,
-            ),
-            _buildTwoRoomsRow(
-              room1Name: 'R. Transmisi',
-              temp1Ctrl: _f4TransTempCtrl,
-              hum1Ctrl: _f4TransHumCtrl,
-            ),
+          rooms: [
+            RoomTempItem(name: 'R. Battery', tempCtrl: _f4BattTempCtrl, humCtrl: _f4BattHumCtrl),
+            RoomTempItem(name: 'R. Rectifier', tempCtrl: _f4RectiTempCtrl, humCtrl: _f4RectiHumCtrl),
+            RoomTempItem(name: 'R. BSC RNC', tempCtrl: _f4BscRncTempCtrl, humCtrl: _f4BscRncHumCtrl),
+            RoomTempItem(name: 'R. Interkoneksi', tempCtrl: _f4InterTempCtrl, humCtrl: _f4InterHumCtrl),
+            RoomTempItem(name: 'R. Transmisi', tempCtrl: _f4TransTempCtrl, humCtrl: _f4TransHumCtrl),
           ],
         ),
-        _buildCard(
+        RectifierCard(
           title: 'Checklist Rectifier (Rect. 11 - 13 HUAWEI)',
-          children: [
-            _buildRectiRow('Rect. 11 HUAWEI', _rects[10]),
-            _buildRectiRow('Rect. 12 HUAWEI', _rects[11]),
-            _buildRectiRow('Rect. 13 HUAWEI', _rects[12]),
-          ],
+          rectifiers: _rects.sublist(10, 13),
         ),
       ],
     );
@@ -2486,22 +1831,12 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
-        _buildCard(
+        RoomTempCard(
           title: 'Suhu Ruang Perangkat Floor #5',
-          children: [
-            _buildTwoRoomsRow(
-              room1Name: 'R. Utility A',
-              temp1Ctrl: _f5UtilATempCtrl,
-              hum1Ctrl: _f5UtilAHumCtrl,
-              room2Name: 'R. Utility B',
-              temp2Ctrl: _f5UtilBTempCtrl,
-              hum2Ctrl: _f5UtilBHumCtrl,
-            ),
-            _buildTwoRoomsRow(
-              room1Name: 'R. Data Center',
-              temp1Ctrl: _f5DcTempCtrl,
-              hum1Ctrl: _f5DcHumCtrl,
-            ),
+          rooms: [
+            RoomTempItem(name: 'R. Utility A', tempCtrl: _f5UtilATempCtrl, humCtrl: _f5UtilAHumCtrl),
+            RoomTempItem(name: 'R. Utility B', tempCtrl: _f5UtilBTempCtrl, humCtrl: _f5UtilBHumCtrl),
+            RoomTempItem(name: 'R. Data Center', tempCtrl: _f5DcTempCtrl, humCtrl: _f5DcHumCtrl),
           ],
         ),
         _buildCard(
@@ -2546,8 +1881,22 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
             ),
           ],
         ),
-        _buildUpsCard('UPS 5.01 Eaton 125 KVA', _ups501),
-        _buildUpsCard('UPS 5.02 Eaton 125 KVA', _ups502),
+        UpsCard(
+          title: 'UPS 5.01 Eaton 125 KVA',
+          kwCtrl: _ups501.kw,
+          occCtrl: _ups501.occ,
+          voltCtrl: _ups501.volt,
+          pctCtrl: _ups501.pct,
+          runtimeCtrl: _ups501.runtime,
+        ),
+        UpsCard(
+          title: 'UPS 5.02 Eaton 125 KVA',
+          kwCtrl: _ups502.kw,
+          occCtrl: _ups502.occ,
+          voltCtrl: _ups502.volt,
+          pctCtrl: _ups502.pct,
+          runtimeCtrl: _ups502.runtime,
+        ),
       ],
     );
   }
@@ -2616,6 +1965,8 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
                   child: OutlinedButton(
                     onPressed: () => _downloadSingleCollage(1),
                     style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryRed,
+                      side: const BorderSide(color: primaryRed),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -2631,6 +1982,8 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
                   child: OutlinedButton(
                     onPressed: () => _downloadSingleCollage(2),
                     style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryRed,
+                      side: const BorderSide(color: primaryRed),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -2646,6 +1999,8 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
                   child: OutlinedButton(
                     onPressed: () => _downloadSingleCollage(3),
                     style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryRed,
+                      side: const BorderSide(color: primaryRed),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -2662,15 +2017,17 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
         ),
 
         // Tombol Kirim & Generate Report
-        FButton(
-          onPress: _onGenerateButtonPressed,
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(FLucideIcons.fileText, size: 18),
-              SizedBox(width: 8),
-              Text('Kirim & Generate Report'),
-            ],
+        ElevatedButton.icon(
+          onPressed: _onGenerateButtonPressed,
+          icon: const Icon(FLucideIcons.fileText, color: Colors.white, size: 18),
+          label: const Text(
+            'Kirim & Generate Report',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryRed,
+            minimumSize: const Size.fromHeight(46),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
         ),
         const SizedBox(height: 16),
