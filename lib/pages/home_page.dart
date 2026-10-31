@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'ttc_sudiang_page.dart';
 import 'ttc_pengayoman_page.dart';
@@ -14,6 +15,83 @@ class HomePage extends StatelessWidget {
   void _navigateTo(BuildContext context, Widget page) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => page),
+    );
+  }
+
+  // Parameter fallbackPin DIHAPUS agar tidak ada angka sensitif di source code
+  Future<void> _showPinDialog(BuildContext context, String envKey, Widget page) async {
+    final expectedPin = dotenv.env[envKey];
+
+    // Proteksi jika file .env belum terbaca atau key tidak ditemukan
+    if (expectedPin == null || expectedPin.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Sistem belum dikonfigurasi. Hubungi administrator (ENV_MISSING).'),
+        ),
+      );
+      return;
+    }
+
+    final pinController = TextEditingController();
+    String errorMessage = '';
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Masukkan PIN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Otorisasi diperlukan untuk masuk ke form site ini.', style: TextStyle(fontSize: 12.5)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: pinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    maxLength: 4,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'PIN 4 digit',
+                      errorText: errorMessage.isNotEmpty ? errorMessage : null,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      isDense: true,
+                    ),
+                    onChanged: (val) {
+                      if (errorMessage.isNotEmpty) {
+                        setState(() => errorMessage = '');
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (pinController.text == expectedPin) {
+                      Navigator.of(ctx).pop();
+                      _navigateTo(context, page);
+                    } else {
+                      setState(() => errorMessage = 'PIN salah atau tidak valid!');
+                      pinController.clear();
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
+                  child: const Text('Masuk', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -70,7 +148,7 @@ class HomePage extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios_rounded, color: primaryRed, size: 16),
+                const Icon(Icons.lock_outline_rounded, color: primaryRed, size: 16),
               ],
             ),
           ),
@@ -85,7 +163,7 @@ class HomePage extends StatelessWidget {
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text(
-          'Checklist Gedung TTC',
+          'Checklist Gedung',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
@@ -95,7 +173,6 @@ class HomePage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Banner Logo & Branding
           Container(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
             decoration: BoxDecoration(
@@ -148,7 +225,6 @@ class HomePage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Daftar Pilihan Site
           const Text(
             'PILIH LOKASI SITE TTC',
             style: TextStyle(
@@ -160,29 +236,30 @@ class HomePage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
+          // Pemanggilan kini murni hanya menggunakan key variabel dari .env
           _buildSiteButton(
             context: context,
             title: 'TTC Sudiang',
             subtitle: 'Makassar, Sulawesi Selatan',
-            onTap: () => _navigateTo(context, const TtcSudiangPage()),
+            onTap: () => _showPinDialog(context, 'PIN_SUDIANG', const TtcSudiangPage()),
           ),
           _buildSiteButton(
             context: context,
             title: 'TTC Pengayoman',
             subtitle: 'Makassar, Sulawesi Selatan',
-            onTap: () => _navigateTo(context, const TtcPengayomanPage()),
+            onTap: () => _showPinDialog(context, 'PIN_PENGAYOMAN', const TtcPengayomanPage()),
           ),
           _buildSiteButton(
             context: context,
             title: 'TTC Paniki',
             subtitle: 'Manado, Sulawesi Utara',
-            onTap: () => _navigateTo(context, const TtcPanikiPage()),
+            onTap: () => _showPinDialog(context, 'PIN_PANIKI', const TtcPanikiPage()),
           ),
           _buildSiteButton(
             context: context,
             title: 'TTC Telling',
             subtitle: 'Telling, Sulawesi Tengah',
-            onTap: () => _navigateTo(context, const TtcTellingPage()),
+            onTap: () => _showPinDialog(context, 'PIN_PALU', const TtcTellingPage()),
           ),
         ],
       ),
