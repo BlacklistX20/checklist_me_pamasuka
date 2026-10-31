@@ -656,25 +656,23 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   }
 
   // --- LOGIKA PENGIRIMAN HTTP KE APPS SCRIPT ---
-  Future<void> _submitDataToAppsScript(String hariTanggal, String jam) async {
+  Future<void> _submitDataToAppsScript(String reportId, String hariTanggal, String jam) async {
     setState(() => _isSubmitting = true);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Sedang mengirim data ke Spreadsheet...'),
-        duration: Duration(days: 1), // Tahan sampai HTTP selesai
+        duration: Duration(days: 1),
       ),
     );
 
     try {
-      // Membersihkan label backup time untuk disesuaikan ke kolom Spreadsheet
       final backupParts = _backupTimeCtrl.text.split('/');
       final backupJam = backupParts.isNotEmpty ? backupParts[0].replaceAll(RegExp(r'[^0-9]'), '') : '0';
       final backupHari = backupParts.length > 1 ? backupParts[1].replaceAll(RegExp(r'[^0-9]'), '') : '0';
 
-      // 1. MEMBUAT PEMETAAN YANG NAMA KEY-NYA 100% SAMA DENGAN GAS "setup()"
       final Map<String, dynamic> rowData = {
-        "ID": DateTime.now().millisecondsSinceEpoch.toString(),
+        "ID": reportId,
         "Hari/Tanggal": hariTanggal,
         "Waktu": jam,
         "Nomor OLO": "089646442994",
@@ -717,7 +715,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         "Backup Time Hari": backupHari,
       };
 
-      // Map dinamis Rectifier (1 - 13)
       for (int i = 0; i < 13; i++) {
         String numStr = (i + 1).toString().padLeft(2, '0');
         rowData["Rect $numStr Load kW"] = _rects[i].kwCtrl.text;
@@ -725,7 +722,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         rowData["Rect $numStr Load %"] = _rects[i].occCtrl.text;
       }
 
-      // Map dinamis UPS
       void addUpsData(String code, UpsItem ups) {
         rowData["UPS $code Load KW"] = ups.kwCtrl.text;
         rowData["UPS $code Load %"] = ups.occCtrl.text;
@@ -737,7 +733,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       addUpsData("3.01", _ups301); addUpsData("3.02", _ups302);
       addUpsData("5.01", _ups501); addUpsData("5.02", _ups502);
 
-      // Map dinamis Ruangan
       void addRoomData(String name, String temp, String hum) {
         rowData["$name Suhu"] = temp;
         rowData["$name Humidity"] = hum;
@@ -766,20 +761,31 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       rowData["PUE"] = "";
       rowData["Pelaksana"] = "$_pelaksana1 / $_pelaksana2";
 
-      // 2. KEMAS DAN KIRIM DATA (POST)
       final payload = {
         "site_target": "TTC Sudiang",
         "data": rowData
       };
 
-      final response = await http.post(
-        Uri.parse(scriptUrl),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(payload),
-      );
+      // Buat request secara manual agar tidak terjebak Redirect 302
+      var request = http.Request('POST', Uri.parse(scriptUrl));
+      request.headers.addAll({"Content-Type": "application/json"});
+      request.body = jsonEncode(payload);
+      request.followRedirects = false; // Matikan auto-follow
 
-      ScaffoldMessenger.of(context).hideCurrentSnackBar(); // Hapus pesan 'Sedang Mengirim'
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
 
+      // Jika Google Apps Script mengembalikan 302/303, buru URL lokasi barunya (tempat JSON berada)
+      if (response.statusCode == 302 || response.statusCode == 303) {
+        final location = response.headers['location'];
+        if (location != null) {
+          response = await http.get(Uri.parse(location)); // Ambil JSON asli
+        }
+      }
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      // Membaca JSON asli
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
         if (result['status'] == 'success') {
@@ -787,8 +793,13 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
             SnackBar(backgroundColor: Colors.green, content: Text(result['message'] ?? 'Berhasil dikirim!')),
           );
         } else {
+          // Tangkap pesan penolakan 2 jam (cooldown) dari Spreadsheet di sini
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: Colors.red, content: Text('Error Script: ${result['message']}')),
+            SnackBar(
+              backgroundColor: Colors.red,
+              content: Text(result['message'] ?? 'Ditolak Sistem'),
+              duration: const Duration(seconds: 5), // Tampilkan lebih lama
+            ),
           );
         }
       } else {
@@ -800,7 +811,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     } catch (e) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.red, content: Text('Koneksi gagal atau tertunda: $e')),
+        SnackBar(backgroundColor: Colors.red, content: Text('Koneksi gagal: $e')),
       );
     } finally {
       setState(() => _isSubmitting = false);
@@ -808,6 +819,8 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   }
 
   void _onGenerateButtonPressed() {
+    if (_isSubmitting) return; // Mencegah klik ganda
+
     final bbmLimitErrors = _validateBbmLimits();
     if (bbmLimitErrors.isNotEmpty) {
       showDialog(
@@ -947,10 +960,11 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
-                _executeGenerateReport();
+                // Arahkan ke dialog konfirmasi akhir, JANGAN langsung kirim
+                _showFinalConfirmationDialog();
               },
               style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
-              child: const Text('Tetap Generate & Kirim', style: TextStyle(color: Colors.white)),
+              child: const Text('Lanjut Proses', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -958,10 +972,37 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       return;
     }
 
-    _executeGenerateReport();
+    _showFinalConfirmationDialog();
   }
 
-  Future<void> _executeGenerateReport() async {
+  void _showFinalConfirmationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Konfirmasi Pengiriman', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Apakah semua data yang diisi sudah valid dan siap dikirim ke server?\n\nID Laporan khusus akan dibuat saat tombol Kirim ditekan.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Periksa Kembali'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              // Generate ID hanya ketika pengiriman dikonfirmasi final
+              final reportId = "UPD-${DateTime.now().millisecondsSinceEpoch}";
+              _executeGenerateReportAndSubmit(reportId);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
+            child: const Text('Kirim', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _executeGenerateReportAndSubmit(String reportId) async {
     final now = DateTime.now();
     const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -978,6 +1019,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
 Hari / Tanggal : $formatHariTanggal
 Pukul : $jam
+ID Laporan : $reportId
 
 Status PLN : $_statusPln
 KWH : ${_kwhCtrl.text}
@@ -1107,17 +1149,14 @@ Pelaksana: $_pelaksana1 / $_pelaksana2
 *Kondisi Gedung Saat Ini Aman*'''
         .trim();
 
-    setState(() {
-      _generatedReportText = text;
-    });
+    setState(() => _generatedReportText = text);
 
     final prefs = await SharedPreferences.getInstance();
     final currentMap = _buildCurrentDataMap();
     await prefs.setString('ttc_sudiang_last_submitted_report', jsonEncode(currentMap));
     _lastSubmittedData = currentMap;
 
-    // Trigger HTTP POST ke Spreadsheet
-    await _submitDataToAppsScript(formatHariTanggal, jam);
+    await _submitDataToAppsScript(reportId, formatHariTanggal, jam);
   }
 
   Future<void> _copyToClipboard() async {
