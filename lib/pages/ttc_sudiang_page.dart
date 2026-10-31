@@ -57,11 +57,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   XFile? _fotoContainmentTablet;
 
   // Pelaksana
-  final List<String> _listPelaksana = [
-    'Akbar', 'Amal', 'Asis', 'Fandi', 'Rizal', 'Ruslan', 'Samsidar', 'Sofyan',
-  ];
-  String _pelaksana1 = 'Akbar';
-  String _pelaksana2 = 'Sofyan';
+  List<String> _listPelaksana = ['Loading...'];
+  String _pelaksana1 = 'Loading...';
+  String _pelaksana2 = 'Loading...';
 
   // --- TAB 1 CONTROLLERS ---
   String _statusPln = 'ON';
@@ -253,6 +251,20 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Future<void> _loadSavedFormData() async {
     final prefs = await SharedPreferences.getInstance();
 
+    // 1. Muat Config Teknisi dari Memori Lokal (Server-Driven)
+    final configStr = prefs.getString('app_config');
+    if (configStr != null) {
+      final config = jsonDecode(configStr);
+      final teknisiStr = config['TEKNISI_SUDIANG'] as String?;
+      if (teknisiStr != null && teknisiStr.isNotEmpty) {
+        setState(() {
+          _listPelaksana = teknisiStr.split(',').map((e) => e.trim()).toList();
+          _pelaksana1 = _listPelaksana.first;
+          _pelaksana2 = _listPelaksana.length > 1 ? _listPelaksana[1] : _listPelaksana.first;
+        });
+      }
+    }
+
     final lastSubJson = prefs.getString('ttc_sudiang_last_submitted_report');
     if (lastSubJson != null && lastSubJson.isNotEmpty) {
       try { _lastSubmittedData = jsonDecode(lastSubJson) as Map<String, dynamic>; } catch (_) {}
@@ -301,7 +313,13 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
           _f4BattTempCtrl.text = data['f4BattTemp'] ?? '0'; _f4BattHumCtrl.text = data['f4BattHum'] ?? '0'; _f4RectiTempCtrl.text = data['f4RectiTemp'] ?? '0'; _f4RectiHumCtrl.text = data['f4RectiHum'] ?? '0'; _f4BscRncTempCtrl.text = data['f4BscRncTemp'] ?? '0'; _f4BscRncHumCtrl.text = data['f4BscRncHum'] ?? '0'; _f4InterTempCtrl.text = data['f4InterTemp'] ?? '0'; _f4InterHumCtrl.text = data['f4InterHum'] ?? '0'; _f4TransTempCtrl.text = data['f4TransTemp'] ?? '0'; _f4TransHumCtrl.text = data['f4TransHum'] ?? '0';
           _f5UtilATempCtrl.text = data['f5UtilATemp'] ?? '0'; _f5UtilAHumCtrl.text = data['f5UtilAHum'] ?? '0'; _f5UtilBTempCtrl.text = data['f5UtilBTemp'] ?? '0'; _f5UtilBHumCtrl.text = data['f5UtilBHum'] ?? '0'; _f5DcTempCtrl.text = data['f5DcTemp'] ?? '0'; _f5DcHumCtrl.text = data['f5DcHum'] ?? '0';
 
-          _pelaksana1 = data['pelaksana1'] ?? 'Akbar'; _pelaksana2 = data['pelaksana2'] ?? 'Sofyan';
+          // Pastikan nilai cache pelaksana ada di list pelaksana baru (mencegah error Dropdown)
+          if (data['pelaksana1'] != null && _listPelaksana.contains(data['pelaksana1'])) {
+            _pelaksana1 = data['pelaksana1'];
+          }
+          if (data['pelaksana2'] != null && _listPelaksana.contains(data['pelaksana2'])) {
+            _pelaksana2 = data['pelaksana2'];
+          }
         });
       } catch (e) {
         debugPrint('Error loading saved form data: $e');
@@ -700,10 +718,13 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         "Status Genset 02": _genset2Mode,
         "Status Genset 03": _genset3Mode,
         "SMU Genset 01": _smuGenset1Ctrl.text,
+        "Batt Volt Genset 01": _voltGenset1Ctrl.text,
         "Suhu Genset 01": _suhuGenset1Ctrl.text,
         "SMU Genset 02": _smuGenset2Ctrl.text,
+        "Batt Volt Genset 02": _voltGenset2Ctrl.text,
         "Suhu Genset 02": _suhuGenset2Ctrl.text,
         "SMU Genset 03": _smuGenset3Ctrl.text,
+        "Batt Volt Genset 03": _voltGenset3Ctrl.text,
         "Suhu Genset 03": _suhuGenset3Ctrl.text,
         "Level Tangki Bulanan 1 (11.662L)": _bbmB1LiterCtrl.text,
         "Level Tangki Bulanan 2 (10.000L)": _bbmB2LiterCtrl.text,
@@ -1012,146 +1033,125 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     final jam = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} WITA';
     final formatHariTanggal = "$hari $tanggal";
 
-    final text = '''
-*Report Checklist TTC Sudiang*
-*Region Sulawesi : TTC Sudiang*
-*Nomor OLO : 089646442994*
+    // Kumpulkan Row Data persis seperti yang dikirim ke Spreadsheet
+    final backupParts = _backupTimeCtrl.text.split('/');
+    final backupJam = backupParts.isNotEmpty ? backupParts[0].replaceAll(RegExp(r'[^0-9]'), '') : '0';
+    final backupHari = backupParts.length > 1 ? backupParts[1].replaceAll(RegExp(r'[^0-9]'), '') : '0';
 
-Hari / Tanggal : $formatHariTanggal
-Pukul : $jam
-ID Laporan : $reportId
+    final Map<String, dynamic> rowData = {
+      "ID": reportId,
+      "Hari/Tanggal": formatHariTanggal,
+      "Waktu": jam,
+      "Nomor OLO": "089646442994",
+      "Status PLN": _statusPln,
+      "KWH": _kwhCtrl.text,
+      "Capacity Trafo": "2000",
+      "Genset Failed (3)": _failedGensetCtrl.text,
+      "PAC Failed (52)": _failedPacCtrl.text,
+      "Rectifier Failed (13)": _failedRectiCtrl.text,
+      "UPS Failed (7)": _failedUpsCtrl.text,
+      "LVMDP_KVA": _lvmdpKvaCtrl.text,
+      "LVMDP_KW": _lvmdpKwCtrl.text,
+      "LVMDP_Cos_Phi": _lvmdpCosPhiCtrl.text,
+      "LVMDP_Tegangan_R-S": _lvmdpRsCtrl.text,
+      "LVMDP_Tegangan_S-N": _lvmdpSnCtrl.text,
+      "LVMDP_Tegangan_T-N": _lvmdpTnCtrl.text,
+      "LVMDP_Tegangan_N-G": _lvmdpNgCtrl.text,
+      "LVMDP_Load_R": _lvmdpArusRCtrl.text,
+      "LVMDP_Load_S": _lvmdpArusSCtrl.text,
+      "LVMDP_Load_T": _lvmdpArusTCtrl.text,
+      "Kap Genset 01": "750",
+      "Kap Genset 02": "1000",
+      "Kap Genset 03": "750",
+      "Status Genset 01": _genset1Mode,
+      "Status Genset 02": _genset2Mode,
+      "Status Genset 03": _genset3Mode,
+      "SMU Genset 01": _smuGenset1Ctrl.text,
+      "Batt Volt Genset 01": _voltGenset1Ctrl.text,
+      "Suhu Genset 01": _suhuGenset1Ctrl.text,
+      "SMU Genset 02": _smuGenset2Ctrl.text,
+      "Batt Volt Genset 02": _voltGenset2Ctrl.text,
+      "Suhu Genset 02": _suhuGenset2Ctrl.text,
+      "SMU Genset 03": _smuGenset3Ctrl.text,
+      "Batt Volt Genset 03": _voltGenset3Ctrl.text,
+      "Suhu Genset 03": _suhuGenset3Ctrl.text,
+      "Level Tangki Bulanan 1 (11.662L)": _bbmB1LiterCtrl.text,
+      "Level Tangki Bulanan 2 (10.000L)": _bbmB2LiterCtrl.text,
+      "Level Tangki Bulanan 3 (10.000L)": _bbmB3LiterCtrl.text,
+      "Level Tangki Harian 1 (1.500L)": _bbmH1LiterCtrl.text,
+      "Level Tangki Harian 2 (1.500L)": _bbmH2LiterCtrl.text,
+      "Total Solar": _totalSolarCtrl.text,
+      "Backup Time Jam": backupJam,
+      "Backup Time Hari": backupHari,
+    };
 
-Status PLN : $_statusPln
-KWH : ${_kwhCtrl.text}
-Capacity Trafo 2000 KVA
+    for (int i = 0; i < 13; i++) {
+      String numStr = (i + 1).toString().padLeft(2, '0');
+      rowData["Rect $numStr Load kW"] = _rects[i].kwCtrl.text;
+      rowData["Rect $numStr Voltage"] = _rects[i].voltCtrl.text;
+      rowData["Rect $numStr Load %"] = _rects[i].occCtrl.text;
+    }
 
-Status Perangkat Failed
-Genset Failed / Total : ${_failedGensetCtrl.text}/3
-PAC failed / Total : ${_failedPacCtrl.text}/52
-Rectifier Failed / Total : ${_failedRectiCtrl.text}/13
-UPS Failed / Total : ${_failedUpsCtrl.text}/7
+    void addUpsData(String code, UpsItem ups) {
+      rowData["UPS $code Load KW"] = ups.kwCtrl.text;
+      rowData["UPS $code Load %"] = ups.occCtrl.text;
+      rowData["UPS $code Battery V"] = ups.voltCtrl.text;
+      rowData["UPS $code Battery %"] = ups.pctCtrl.text;
+      rowData["UPS $code Runtime min"] = ups.runtimeCtrl.text;
+    }
+    addUpsData("2.02", _ups202); addUpsData("2.03", _ups203);
+    addUpsData("3.01", _ups301); addUpsData("3.02", _ups302);
+    addUpsData("5.01", _ups501); addUpsData("5.02", _ups502);
 
-Update Panel LVMDP
-KVA : ${_lvmdpKvaCtrl.text}
-KW  : ${_lvmdpKwCtrl.text}
-Cos Phi : ${_lvmdpCosPhiCtrl.text}
-Tegangan
-R-S : ${_lvmdpRsCtrl.text} V 
-S-N : ${_lvmdpSnCtrl.text} V
-T-N : ${_lvmdpTnCtrl.text} V
-N-G : ${_lvmdpNgCtrl.text} V
-Arus 
-R : ${_lvmdpArusRCtrl.text} A  
-S : ${_lvmdpArusSCtrl.text} A   
-T : ${_lvmdpArusTCtrl.text} A 
+    void addRoomData(String name, String temp, String hum) {
+      rowData["$name Suhu"] = temp;
+      rowData["$name Humidity"] = hum;
+    }
+    addRoomData("L1 R. Genset", _f1GensetTempCtrl.text, _f1GensetHumCtrl.text);
+    addRoomData("L1 R. Trafo", _f1TrafoTempCtrl.text, _f1TrafoHumCtrl.text);
+    addRoomData("L2 R. Battery", _f2BattTempCtrl.text, _f2BattHumCtrl.text);
+    addRoomData("L2 R. Rectifier", _f2RectiTempCtrl.text, _f2RectiHumCtrl.text);
+    addRoomData("L2 R. Msc", _f2MscTempCtrl.text, _f2MscHumCtrl.text);
+    addRoomData("L2 R. Csps", _f2CspsTempCtrl.text, _f2CspsHumCtrl.text);
+    addRoomData("L3 R. Battery", _f3BattTempCtrl.text, _f3BattHumCtrl.text);
+    addRoomData("L3 R. Rectifier", _f3RectiTempCtrl.text, _f3RectiHumCtrl.text);
+    addRoomData("L3 R. Invas", _f3InvasTempCtrl.text, _f3InvasHumCtrl.text);
+    addRoomData("L3 R. Core", _f3CoreTempCtrl.text, _f3CoreHumCtrl.text);
+    addRoomData("L3 R. Mkios", _f3MkiosTempCtrl.text, _f3MkiosHumCtrl.text);
+    addRoomData("L3 R. Ocs", _f3OcsTempCtrl.text, _f3OcsHumCtrl.text);
+    addRoomData("L4 R. Battery", _f4BattTempCtrl.text, _f4BattHumCtrl.text);
+    addRoomData("L4 R. Rectifier", _f4RectiTempCtrl.text, _f4RectiHumCtrl.text);
+    addRoomData("L4 R. BSC RNC", _f4BscRncTempCtrl.text, _f4BscRncHumCtrl.text);
+    addRoomData("L4 R. Interkoneksi", _f4InterTempCtrl.text, _f4InterHumCtrl.text);
+    addRoomData("L4 R. Transmisi", _f4TransTempCtrl.text, _f4TransHumCtrl.text);
+    addRoomData("L5 R. Utility A", _f5UtilATempCtrl.text, _f5UtilAHumCtrl.text);
+    addRoomData("L5 R. Utility B", _f5UtilBTempCtrl.text, _f5UtilBHumCtrl.text);
+    addRoomData("L5 R. Data center", _f5DcTempCtrl.text, _f5DcHumCtrl.text);
 
-Update Status Genset
-Genset 01 : 750 KVA
-Genset 02 : 1000 KVA
-Genset 03 : 750 KVA
-Genset 01 ( $_genset1Mode )
-Genset 02 ( $_genset2Mode )
-Genset 03 ( $_genset3Mode )
-SMU Genset 01 : ${_smuGenset1Ctrl.text}/${_voltGenset1Ctrl.text} V
-Suhu Genset 01 : ${_suhuGenset1Ctrl.text}°C
-SMU Genset 02 : ${_smuGenset2Ctrl.text}/${_voltGenset2Ctrl.text} V
-Suhu Genset 02 : ${_suhuGenset2Ctrl.text}°C
-SMU Genset 03 : ${_smuGenset3Ctrl.text}/${_voltGenset3Ctrl.text} V
-Suhu Genset 03 : ${_suhuGenset3Ctrl.text}°C
+    rowData["PUE"] = "";
+    rowData["Pelaksana"] = "$_pelaksana1 / $_pelaksana2";
 
-Update BBM
-Level Tangki bulanan 1 (11.662) 
-= ${_bbmB1LiterCtrl.text} L
-Level Tangki bulanan 2  (10.000)
-= ${_bbmB2LiterCtrl.text} L
-Level Tangki bulanan 3 (10.000)
-= ${_bbmB3LiterCtrl.text} L
-Level Tangki harian 1 (1500) 
-= ${_bbmH1LiterCtrl.text} L
-Level Tangki Harian 2 (1500)
-= ${_bbmH2LiterCtrl.text} L
-Total Solar : ${_totalSolarCtrl.text} L
-Backup time : ${_backupTimeCtrl.text}
-
-Update Suhu AC Ruang Perangkat :
-Floor #1 
-R. Genset : ${_f1GensetTempCtrl.text}°C/${_f1GensetHumCtrl.text}%
-R. Trafo  : ${_f1TrafoTempCtrl.text}°C/${_f1TrafoHumCtrl.text}%
-
-Floor #2 
-R. Battery : ${_f2BattTempCtrl.text}°C/${_f2BattHumCtrl.text}%
-R. Rectifier : ${_f2RectiTempCtrl.text}°C/${_f2RectiHumCtrl.text}%
-R. Msc : ${_f2MscTempCtrl.text}°C/${_f2MscHumCtrl.text}%
-R. Csps : ${_f2CspsTempCtrl.text}°C/${_f2CspsHumCtrl.text}%
-
-Floor #3 : 
-R. Battery: ${_f3BattTempCtrl.text}°C/${_f3BattHumCtrl.text}%
-R. Rectifier : ${_f3RectiTempCtrl.text}°C/${_f3RectiHumCtrl.text}%
-R. Invas : ${_f3InvasTempCtrl.text}°C/${_f3InvasHumCtrl.text}%
-R. Core : ${_f3CoreTempCtrl.text}°C/${_f3CoreHumCtrl.text}%
-R. Mkios : ${_f3MkiosTempCtrl.text}°C/${_f3MkiosHumCtrl.text}%
-R. Ocs : ${_f3OcsTempCtrl.text}°C/${_f3OcsHumCtrl.text}%
-
-Floor #4 :
-R. Battery : ${_f4BattTempCtrl.text}°C/${_f4BattHumCtrl.text}%
-R. Rectifier : ${_f4RectiTempCtrl.text}°C/${_f4RectiHumCtrl.text}%
-R. BSC RNC : ${_f4BscRncTempCtrl.text}°C/${_f4BscRncHumCtrl.text}%
-R. Interkoneksi : ${_f4InterTempCtrl.text}°C/${_f4InterHumCtrl.text}%
-R. Transmisi : ${_f4TransTempCtrl.text}°C/${_f4TransHumCtrl.text}%
-
-Floor #5 :  
-R. Utility A : ${_f5UtilATempCtrl.text}°C/${_f5UtilAHumCtrl.text}%
-R. Utility B : ${_f5UtilBTempCtrl.text}°C/${_f5UtilBHumCtrl.text}%
-R. Data center: ${_f5DcTempCtrl.text}°C/${_f5DcHumCtrl.text}%
-
-Checklist Rectifier
-DIVCE/VOLTAGE/ LOAD
-Rect. 01 HUAWEI : ${_rects[0].kwCtrl.text} kw/${_rects[0].voltCtrl.text} V/${_rects[0].occCtrl.text}%
-Rect. 02 HUAWEI : ${_rects[1].kwCtrl.text} kw/${_rects[1].voltCtrl.text} V/${_rects[1].occCtrl.text}%
-Rect. 03 HUAWEI : ${_rects[2].kwCtrl.text} kw/${_rects[2].voltCtrl.text} V/${_rects[2].occCtrl.text}%
-Rect. 04 HUAWEI : ${_rects[3].kwCtrl.text} kw/${_rects[3].voltCtrl.text} V/${_rects[3].occCtrl.text}%
-Rect. 05 HUAWEI : ${_rects[4].kwCtrl.text} kw/${_rects[4].voltCtrl.text} V/${_rects[4].occCtrl.text}%
-Rect. 06 HUAWEI : ${_rects[5].kwCtrl.text} kw/${_rects[5].voltCtrl.text} V/${_rects[5].occCtrl.text}%
-Rect. 07 HUAWEI : ${_rects[6].kwCtrl.text} kw/${_rects[6].voltCtrl.text} V/${_rects[6].occCtrl.text}%
-Rect. 08 HUAWEI : ${_rects[7].kwCtrl.text} kw/${_rects[7].voltCtrl.text} V/${_rects[7].occCtrl.text}%
-Rect. 09 HUAWEI : ${_rects[8].kwCtrl.text} kw/${_rects[8].voltCtrl.text} V/${_rects[8].occCtrl.text}%
-Rect. 10 HUAWEI : ${_rects[9].kwCtrl.text} kw/${_rects[9].voltCtrl.text} V/${_rects[9].occCtrl.text}%
-Rect. 11 HUAWEI : ${_rects[10].kwCtrl.text} kw/${_rects[10].voltCtrl.text} V/${_rects[10].occCtrl.text}%
-Rect. 12 HUAWEI : ${_rects[11].kwCtrl.text} kw/${_rects[11].voltCtrl.text} V/${_rects[11].occCtrl.text}%
-Rect. 13 HUAWEI : ${_rects[12].kwCtrl.text} kw/${_rects[12].voltCtrl.text} V/${_rects[12].occCtrl.text}%
-
-Update UPS
-UPS 2.02 Eaton 100 KVA : ${_ups202.kwCtrl.text} KW/${_ups202.occCtrl.text}%
-- Battery ${_ups202.voltCtrl.text} V/${_ups202.pctCtrl.text}%
-- Estimated runtime ${_ups202.runtimeCtrl.text} min
-
-UPS 2.03 Eaton 100 KVA : ${_ups203.kwCtrl.text} KW/${_ups203.occCtrl.text}%
-- Battery ${_ups203.voltCtrl.text} V/${_ups203.pctCtrl.text}%
-- Estimated runtime ${_ups203.runtimeCtrl.text} min
-
-UPS 3.01 Eaton 125 KVA : ${_ups301.kwCtrl.text} KW/${_ups301.occCtrl.text}%
-- Battery ${_ups301.voltCtrl.text} V/${_ups301.pctCtrl.text}%
-- Estimated runtime ${_ups301.runtimeCtrl.text} min
-
-UPS 3.02 Eaton 125 KVA : ${_ups302.kwCtrl.text} KW/${_ups302.occCtrl.text}%
-- Battery ${_ups302.voltCtrl.text} V/${_ups302.pctCtrl.text}%
-- Estimated runtime ${_ups302.runtimeCtrl.text} min
-
-UPS 5.01 Eaton 125 KVA : ${_ups501.kwCtrl.text} KW/${_ups501.occCtrl.text}%
-- Battery ${_ups501.voltCtrl.text} V/${_ups501.pctCtrl.text}%
-- Estimated runtime ${_ups501.runtimeCtrl.text} min
-
-UPS 5.02 Eaton 125 KVA : ${_ups502.kwCtrl.text} KW/${_ups502.occCtrl.text}%
-- Battery ${_ups502.voltCtrl.text} V/${_ups502.pctCtrl.text}%
-- Estimated runtime ${_ups502.runtimeCtrl.text} min
-
-Pelaksana: $_pelaksana1 / $_pelaksana2
-*Kondisi Gedung Saat Ini Aman*'''
-        .trim();
-
-    setState(() => _generatedReportText = text);
-
+    // 2. MENGOLAH TEMPLATE DINAMIS
     final prefs = await SharedPreferences.getInstance();
+    final configStr = prefs.getString('app_config');
+
+    // Teks Fallback Darurat jika Template Gagal Dimuat
+    String templateText = "Laporan Sudiang (Template Gagal Dimuat). Hubungi Admin.";
+
+    if (configStr != null) {
+      final config = jsonDecode(configStr);
+      templateText = config['TEMPLATE_SUDIANG'] ?? templateText;
+    }
+
+    // Replace semua variabel {{Key}} di template dengan Value aslinya
+    rowData.forEach((key, value) {
+      templateText = templateText.replaceAll('{{$key}}', value.toString());
+    });
+
+    setState(() {
+      _generatedReportText = templateText.trim();
+    });
+
     final currentMap = _buildCurrentDataMap();
     await prefs.setString('ttc_sudiang_last_submitted_report', jsonEncode(currentMap));
     _lastSubmittedData = currentMap;

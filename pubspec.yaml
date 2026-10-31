@@ -45,6 +45,7 @@ dependencies:
   flutter_image_compress: ^2.5.1
   http: ^1.6.0
   flutter_dotenv: ^6.0.1
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:
