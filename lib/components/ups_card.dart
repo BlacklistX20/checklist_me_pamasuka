@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
 import 'unit_input_field.dart';
 
-class UpsCard extends StatelessWidget {
-  final String title;
+class UpsItem {
   final TextEditingController kwCtrl;
   final TextEditingController occCtrl;
   final TextEditingController voltCtrl;
   final TextEditingController pctCtrl;
   final TextEditingController runtimeCtrl;
 
-  const UpsCard({
-    super.key,
-    required this.title,
+  UpsItem({
     required this.kwCtrl,
     required this.occCtrl,
     required this.voltCtrl,
     required this.pctCtrl,
     required this.runtimeCtrl,
+  });
+}
+
+class UpsCard extends StatelessWidget {
+  final String title;
+  final UpsItem item;
+
+  const UpsCard({
+    super.key,
+    required this.title,
+    required this.item,
   });
 
   @override
@@ -36,18 +44,18 @@ class UpsCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: UnitInputField(label: 'Load', controller: kwCtrl, unit: 'KW')),
+              Expanded(child: UnitInputField(label: 'Load', controller: item.kwCtrl, unit: 'KW')),
               const SizedBox(width: 8),
-              Expanded(child: UnitInputField(label: 'Occupancy', controller: occCtrl, unit: '%')),
+              Expanded(child: UnitInputField(label: 'Occupancy', controller: item.occCtrl, unit: '%')),
             ],
           ),
           Row(
             children: [
-              Expanded(child: UnitInputField(label: 'Battery Volt', controller: voltCtrl, unit: 'V')),
+              Expanded(child: UnitInputField(label: 'Battery Volt', controller: item.voltCtrl, unit: 'V')),
               const SizedBox(width: 6),
-              Expanded(child: UnitInputField(label: 'Battery %', controller: pctCtrl, unit: '%')),
+              Expanded(child: UnitInputField(label: 'Battery %', controller: item.pctCtrl, unit: '%')),
               const SizedBox(width: 6),
-              Expanded(child: UnitInputField(label: 'Est. Runtime', controller: runtimeCtrl, unit: 'min')),
+              Expanded(child: UnitInputField(label: 'Est. Runtime', controller: item.runtimeCtrl, unit: 'min')),
             ],
           ),
         ],

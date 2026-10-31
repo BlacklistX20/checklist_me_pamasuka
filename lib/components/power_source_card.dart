@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'unit_input_field.dart';
+import 'custom_dropdown_field.dart';
 
 class PowerSourceCard extends StatelessWidget {
   final String title;
@@ -41,31 +42,11 @@ class PowerSourceCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Status PLN', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: 38,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(7),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: statusPln,
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(value: 'ON', child: Text('ON', style: TextStyle(fontSize: 13))),
-                            DropdownMenuItem(value: 'OFF', child: Text('OFF', style: TextStyle(fontSize: 13))),
-                          ],
-                          onChanged: onStatusChanged,
-                        ),
-                      ),
-                    ),
-                  ],
+                child: CustomDropdownField(
+                  label: 'Status PLN',
+                  value: statusPln,
+                  items: const ['ON', 'OFF'],
+                  onChanged: onStatusChanged,
                 ),
               ),
               const SizedBox(width: 8),

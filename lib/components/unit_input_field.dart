@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class UnitInputField extends StatelessWidget {
   final String label;
@@ -54,21 +55,45 @@ class UnitInputField extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: TextFormField(
-                    controller: controller,
-                    enabled: enabled,
-                    keyboardType: keyboardType,
-                    onChanged: onChanged,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: isError ? Colors.red.shade900 : Colors.black87,
-                      fontWeight: isError ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                    ),
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: controller,
+                    builder: (context, value, child) {
+                      // Tombol clear muncul jika teks tidak kosong dan bukan "0"
+                      final showClear = value.text.isNotEmpty && value.text != '0';
+
+                      return TextFormField(
+                        controller: controller,
+                        enabled: enabled,
+                        keyboardType: keyboardType,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                        ],
+                        onChanged: onChanged,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: isError ? Colors.red.shade900 : Colors.black87,
+                          fontWeight: isError ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                          suffixIconConstraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                          suffixIcon: showClear && enabled
+                              ? GestureDetector(
+                            onTap: () {
+                              controller.text = '0';
+                              controller.selection = TextSelection.fromPosition(
+                                const TextPosition(offset: 1),
+                              );
+                              if (onChanged != null) onChanged!('0');
+                            },
+                            child: const Icon(Icons.cancel, size: 14, color: Colors.grey),
+                          )
+                              : null,
+                        ),
+                      );
+                    },
                   ),
                 ),
                 Container(

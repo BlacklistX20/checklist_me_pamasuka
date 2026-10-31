@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'unit_input_field.dart';
+import 'custom_dropdown_field.dart';
 
 class GensetCard extends StatelessWidget {
   final String title;
@@ -35,35 +36,15 @@ class GensetCard extends StatelessWidget {
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 6),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 flex: 4,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Mode', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: 38,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(7),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: modeValue,
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(value: 'Standby Auto', child: Text('Standby Auto', style: TextStyle(fontSize: 12))),
-                            DropdownMenuItem(value: 'ON', child: Text('ON', style: TextStyle(fontSize: 12))),
-                            DropdownMenuItem(value: 'OFF', child: Text('OFF', style: TextStyle(fontSize: 12))),
-                          ],
-                          onChanged: onModeChanged,
-                        ),
-                      ),
-                    ),
-                  ],
+                child: CustomDropdownField(
+                  label: 'Mode',
+                  value: modeValue,
+                  items: const ['Standby Auto', 'ON', 'OFF'],
+                  onChanged: onModeChanged,
                 ),
               ),
               const SizedBox(width: 8),
@@ -87,7 +68,11 @@ class GensetCard extends StatelessWidget {
           const SizedBox(height: 4),
           OutlinedButton.icon(
             onPressed: onPhotoPressed,
-            icon: Icon(hasPhoto ? Icons.check_circle : Icons.camera_alt_outlined, size: 16, color: hasPhoto ? Colors.green : null),
+            icon: Icon(
+              hasPhoto ? Icons.check_circle : Icons.camera_alt_outlined,
+              size: 16,
+              color: hasPhoto ? Colors.green : null,
+            ),
             label: Text(
               hasPhoto ? 'Foto SMU Tersimpan (Ambil Ulang)' : 'Ambil Foto SMU $title',
               style: TextStyle(color: hasPhoto ? Colors.green.shade800 : null),

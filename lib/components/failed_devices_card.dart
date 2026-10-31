@@ -41,19 +41,19 @@ class FailedDevicesCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: UnitInputField(label: 'Genset', controller: gensetCtrl, unit: totalGenset, keyboardType: TextInputType.number),
+                child: UnitInputField(label: 'Genset', controller: gensetCtrl, unit: totalGenset),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: UnitInputField(label: 'PAC', controller: pacCtrl, unit: totalPac, keyboardType: TextInputType.number),
+                child: UnitInputField(label: 'PAC', controller: pacCtrl, unit: totalPac),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: UnitInputField(label: 'Rectifier', controller: rectiCtrl, unit: totalRecti, keyboardType: TextInputType.number),
+                child: UnitInputField(label: 'Rectifier', controller: rectiCtrl, unit: totalRecti),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: UnitInputField(label: 'UPS', controller: upsCtrl, unit: totalUps, keyboardType: TextInputType.number),
+                child: UnitInputField(label: 'UPS', controller: upsCtrl, unit: totalUps),
               ),
             ],
           ),

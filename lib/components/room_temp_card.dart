@@ -62,25 +62,27 @@ class RoomTempCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
+
                   // Ruangan 2 (Jika ada)
-                  Expanded(
-                    child: (i + 1 < rooms.length)
-                        ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(rooms[i + 1].name, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Expanded(child: UnitInputField(label: '', controller: rooms[i + 1].tempCtrl, unit: '°C')),
-                            const SizedBox(width: 4),
-                            Expanded(child: UnitInputField(label: '', controller: rooms[i + 1].humCtrl, unit: '%')),
-                          ],
-                        ),
-                      ],
+                  if (i + 1 < rooms.length)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(rooms[i + 1].name, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Expanded(child: UnitInputField(label: '', controller: rooms[i + 1].tempCtrl, unit: '°C')),
+                              const SizedBox(width: 4),
+                              Expanded(child: UnitInputField(label: '', controller: rooms[i + 1].humCtrl, unit: '%')),
+                            ],
+                          ),
+                        ],
+                      ),
                     )
-                        : const SizedBox.shrink(),
-                  ),
+                  else
+                    const Spacer(), // Spacer native tanpa Expanded untuk item ganjil
                 ],
               ),
             ),

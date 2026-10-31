@@ -41,22 +41,32 @@ class TankCard extends StatelessWidget {
   }
 
   void _calculateFromHeight(String val) {
-    final h = double.tryParse(val);
+    // Sanitasi koma desimal agar bisa diparsing aman
+    final cleanVal = val.replaceAll('.', '').replaceAll(',', '.');
+    final h = double.tryParse(cleanVal);
+
     if (h != null && h >= 0) {
       final liter = calculateHorizontalTankVolume(
         lengthCm: panjang,
         diameterCm: diameter,
         heightCm: h,
       ).round();
-      literCtrl.text = liter.toString();
+
+      // Kembalikan format ribuan ke text controller
+      literCtrl.text = liter.toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+            (Match m) => '${m[1]}.',
+      );
     }
     onValueChanged();
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentHeight = double.tryParse(tinggiCtrl.text) ?? 0.0;
-    final currentLiter = double.tryParse(literCtrl.text.replaceAll('.', '')) ?? 0.0;
+    // Terapkan sanitasi serupa untuk validasi UI
+    final currentHeight = double.tryParse(tinggiCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0;
+    final currentLiter = double.tryParse(literCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0;
+
     final isHeightExceeded = currentHeight > maxHeight;
     final isLiterExceeded = currentLiter > maxLiter;
     final isAnyExceeded = isHeightExceeded || isLiterExceeded;

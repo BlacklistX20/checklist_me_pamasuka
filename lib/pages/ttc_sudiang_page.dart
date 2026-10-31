@@ -9,6 +9,8 @@ import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_debounce/easy_debounce.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 // Komponen Modular
 import '../components/unit_input_field.dart';
@@ -34,14 +36,6 @@ class UpsData {
         volt = TextEditingController(text: voltVal),
         pct = TextEditingController(text: pctVal),
         runtime = TextEditingController(text: runtimeVal);
-
-  void dispose() {
-    kw.dispose();
-    occ.dispose();
-    volt.dispose();
-    pct.dispose();
-    runtime.dispose();
-  }
 }
 
 class TtcSudiangPage extends StatefulWidget {
@@ -384,7 +378,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       'backupTime': _backupTimeCtrl.text,
       'f1GensetTemp': _f1GensetTempCtrl.text,
       'f1GensetHum': _f1GensetHumCtrl.text,
-      'f1TrafoTemp': _f1TrafoHumCtrl.text,
+      'f1TrafoTemp': _f1TrafoTempCtrl.text,
       'f1TrafoHum': _f1TrafoHumCtrl.text,
       'f2BattTemp': _f2BattTempCtrl.text,
       'f2BattHum': _f2BattHumCtrl.text,
@@ -504,7 +498,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
           _f1GensetTempCtrl.text = data['f1GensetTemp'] ?? '0';
           _f1GensetHumCtrl.text = data['f1GensetHum'] ?? '0';
-          _f1TrafoTempCtrl.text = data['f1TrafoHum'] ?? '0';
+          _f1TrafoTempCtrl.text = data['f1TrafoTemp'] ?? '0';
           _f1TrafoHumCtrl.text = data['f1TrafoHum'] ?? '0';
 
           _f2BattTempCtrl.text = data['f2BattTemp'] ?? '0';
@@ -542,7 +536,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
           _f3BattTempCtrl.text = data['f3BattTemp'] ?? '0';
           _f3BattHumCtrl.text = data['f3BattHum'] ?? '0';
-          _f3RectiTempCtrl.text = data['f3RectiHum'] ?? '0';
+          _f3RectiTempCtrl.text = data['f3RectiTemp'] ?? '0';
           _f3RectiHumCtrl.text = data['f3RectiHum'] ?? '0';
           _f3InvasTempCtrl.text = data['f3InvasTemp'] ?? '0';
           _f3InvasHumCtrl.text = data['f3InvasHum'] ?? '0';
@@ -610,7 +604,13 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     }
 
     for (final ctrl in _allControllers) {
-      ctrl.addListener(_saveFormData);
+      ctrl.addListener(() {
+        EasyDebounce.debounce(
+          'save-form-debouncer',
+          const Duration(milliseconds: 500),
+              () => _saveFormData(),
+        );
+      });
     }
   }
 
@@ -674,6 +674,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   @override
   void dispose() {
+    EasyDebounce.cancelAll();
     for (final ctrl in _allControllers) {
       ctrl.dispose();
     }
@@ -683,20 +684,24 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   // --- AMBIL GAMBAR KAMERA (HEMAT PENYIMPANAN) ---
   Future<void> _takePhoto(String title, Function(XFile) onSaved) async {
     try {
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 60,
-      );
+      final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
       if (photo != null) {
-        setState(() {
-          onSaved(photo);
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Foto $title berhasil disimpan')),
-          );
+        final targetPath = '${photo.path}_compressed.jpg';
+        final compressedFile = await FlutterImageCompress.compressAndGetFile(
+          photo.path,
+          targetPath,
+          quality: 60,
+          minWidth: 1024,
+          minHeight: 1024,
+        );
+
+        if (compressedFile != null) {
+          setState(() => onSaved(XFile(compressedFile.path)));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Foto $title berhasil disimpan')),
+            );
+          }
         }
       }
     } catch (e) {
@@ -915,11 +920,11 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   }
 
   void _recalculateTotalBbm() {
-    final b1 = double.tryParse(_bbmB1LiterCtrl.text.replaceAll('.', '')) ?? 0;
-    final b2 = double.tryParse(_bbmB2LiterCtrl.text.replaceAll('.', '')) ?? 0;
-    final b3 = double.tryParse(_bbmB3LiterCtrl.text.replaceAll('.', '')) ?? 0;
-    final h1 = double.tryParse(_bbmH1LiterCtrl.text.replaceAll('.', '')) ?? 0;
-    final h2 = double.tryParse(_bbmH2LiterCtrl.text.replaceAll('.', '')) ?? 0;
+    final b1 = double.tryParse(_bbmB1LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+    final b2 = double.tryParse(_bbmB2LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+    final b3 = double.tryParse(_bbmB3LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+    final h1 = double.tryParse(_bbmH1LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+    final h2 = double.tryParse(_bbmH2LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
 
     final total = (b1 + b2 + b3 + h1 + h2).round();
     _totalSolarCtrl.text = total.toString().replaceAllMapped(
