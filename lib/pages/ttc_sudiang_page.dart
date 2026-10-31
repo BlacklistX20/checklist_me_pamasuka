@@ -506,24 +506,152 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   List<String> _validateBbmLimits() {
     final errors = <String>[];
     double parseVal(String text) => double.tryParse(text.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0;
+
     final hB1 = parseVal(_bbmB1TinggiCtrl.text); final vB1 = parseVal(_bbmB1LiterCtrl.text);
     if (hB1 > _maxHeightB1) errors.add('Tangki Bulanan 1: Tinggi ($hB1 cm) melebihi batas maks ${_maxHeightB1.toInt()} cm');
     if (vB1 > _maxLiterB1) errors.add('Tangki Bulanan 1: Volume ($vB1 L) melebihi batas maks ${_maxLiterB1.toInt()} L');
-    // Tambahkan validasi lain sesuai kode asli...
+
+    final hB2 = parseVal(_bbmB2TinggiCtrl.text); final vB2 = parseVal(_bbmB2LiterCtrl.text);
+    if (hB2 > _maxHeightB23) errors.add('Tangki Bulanan 2: Tinggi ($hB2 cm) melebihi batas maks ${_maxHeightB23.toInt()} cm');
+    if (vB2 > _maxLiterB23) errors.add('Tangki Bulanan 2: Volume ($vB2 L) melebihi batas maks ${_maxLiterB23.toInt()} L');
+
+    final hB3 = parseVal(_bbmB3TinggiCtrl.text); final vB3 = parseVal(_bbmB3LiterCtrl.text);
+    if (hB3 > _maxHeightB23) errors.add('Tangki Bulanan 3: Tinggi ($hB3 cm) melebihi batas maks ${_maxHeightB23.toInt()} cm');
+    if (vB3 > _maxLiterB23) errors.add('Tangki Bulanan 3: Volume ($vB3 L) melebihi batas maks ${_maxLiterB23.toInt()} L');
+
+    final hH1 = parseVal(_bbmH1TinggiCtrl.text); final vH1 = parseVal(_bbmH1LiterCtrl.text);
+    if (hH1 > _maxHeightH12) errors.add('Tangki Harian 1: Tinggi ($hH1 cm) melebihi batas maks ${_maxHeightH12.toInt()} cm');
+    if (vH1 > _maxLiterH12) errors.add('Tangki Harian 1: Volume ($vH1 L) melebihi batas maks ${_maxLiterH12.toInt()} L');
+
+    final hH2 = parseVal(_bbmH2TinggiCtrl.text); final vH2 = parseVal(_bbmH2LiterCtrl.text);
+    if (hH2 > _maxHeightH12) errors.add('Tangki Harian 2: Tinggi ($hH2 cm) melebihi batas maks ${_maxHeightH12.toInt()} cm');
+    if (vH2 > _maxLiterH12) errors.add('Tangki Harian 2: Volume ($vH2 L) melebihi batas maks ${_maxLiterH12.toInt()} L');
+
     return errors;
   }
 
   ({List<String> zeroList, List<String> sameList}) _checkZeroAndSameWarnings() {
-    final zeroList = <String>[]; final sameList = <String>[];
+    final zeroList = <String>[];
+    final sameList = <String>[];
+
     bool isZero(String val) {
-      final num = double.tryParse(val.trim().replaceAll('.', '').replaceAll(',', '.'));
-      return num == null || num == 0;
+      final clean = val.trim().replaceAll('.', '').replaceAll(',', '.');
+      final num = double.tryParse(clean);
+      return clean.isEmpty || clean == '0' || (num != null && num == 0);
     }
+
     void verify(String fieldKey, String label, String currentVal, {bool allowSame = false}) {
-      if (isZero(currentVal)) zeroList.add(label);
+      if (isZero(currentVal)) {
+        zeroList.add(label);
+      } else if (!allowSame && _lastSubmittedData.isNotEmpty) {
+        final prevVal = _lastSubmittedData[fieldKey]?.toString();
+        if (prevVal != null && prevVal.isNotEmpty && prevVal.trim() == currentVal.trim()) {
+          sameList.add(label);
+        }
+      }
     }
+
     verify('kwh', 'KWH Meter', _kwhCtrl.text);
-    // Tambahkan validasi nol lainnya sesuai kode asli...
+
+    verify('failedGenset', 'Perangkat Failed: Genset', _failedGensetCtrl.text, allowSame: true);
+    verify('failedPac', 'Perangkat Failed: PAC', _failedPacCtrl.text, allowSame: true);
+    verify('failedRecti', 'Perangkat Failed: Rectifier', _failedRectiCtrl.text, allowSame: true);
+    verify('failedUps', 'Perangkat Failed: UPS', _failedUpsCtrl.text, allowSame: true);
+
+    verify('lvmdpKva', 'LVMDP: KVA', _lvmdpKvaCtrl.text);
+    verify('lvmdpKw', 'LVMDP: KW', _lvmdpKwCtrl.text);
+    verify('lvmdpCosPhi', 'LVMDP: Cos Phi', _lvmdpCosPhiCtrl.text);
+    verify('lvmdpRs', 'LVMDP: Tegangan R-S', _lvmdpRsCtrl.text);
+    verify('lvmdpSn', 'LVMDP: Tegangan S-N', _lvmdpSnCtrl.text);
+    verify('lvmdpTn', 'LVMDP: Tegangan T-N', _lvmdpTnCtrl.text);
+    verify('lvmdpNg', 'LVMDP: Tegangan N-G', _lvmdpNgCtrl.text);
+    verify('lvmdpArusR', 'LVMDP: Arus R', _lvmdpArusRCtrl.text);
+    verify('lvmdpArusS', 'LVMDP: Arus S', _lvmdpArusSCtrl.text);
+    verify('lvmdpArusT', 'LVMDP: Arus T', _lvmdpArusTCtrl.text);
+
+    verify('smuGenset1', 'Genset 01: SMU', _smuGenset1Ctrl.text);
+    verify('voltGenset1', 'Genset 01: Baterai Volt', _voltGenset1Ctrl.text);
+    verify('suhuGenset1', 'Genset 01: Suhu', _suhuGenset1Ctrl.text);
+    verify('smuGenset2', 'Genset 02: SMU', _smuGenset2Ctrl.text);
+    verify('voltGenset2', 'Genset 02: Baterai Volt', _voltGenset2Ctrl.text);
+    verify('suhuGenset2', 'Genset 02: Suhu', _suhuGenset2Ctrl.text);
+    verify('smuGenset3', 'Genset 03: SMU', _smuGenset3Ctrl.text);
+    verify('voltGenset3', 'Genset 03: Baterai Volt', _voltGenset3Ctrl.text);
+    verify('suhuGenset3', 'Genset 03: Suhu', _suhuGenset3Ctrl.text);
+
+    verify('bbmB1Liter', 'Volume Tangki Bulanan 1', _bbmB1LiterCtrl.text, allowSame: true);
+    verify('bbmB2Liter', 'Volume Tangki Bulanan 2', _bbmB2LiterCtrl.text, allowSame: true);
+    verify('bbmB3Liter', 'Volume Tangki Bulanan 3', _bbmB3LiterCtrl.text, allowSame: true);
+    verify('bbmH1Liter', 'Volume Tangki Harian 1', _bbmH1LiterCtrl.text, allowSame: true);
+    verify('bbmH2Liter', 'Volume Tangki Harian 2', _bbmH2LiterCtrl.text, allowSame: true);
+
+    verify('f1GensetTemp', 'Floor 1: R. Genset Suhu', _f1GensetTempCtrl.text);
+    verify('f1GensetHum', 'Floor 1: R. Genset RH', _f1GensetHumCtrl.text);
+    verify('f1TrafoTemp', 'Floor 1: R. Trafo Suhu', _f1TrafoTempCtrl.text);
+    verify('f1TrafoHum', 'Floor 1: R. Trafo RH', _f1TrafoHumCtrl.text);
+
+    verify('f2BattTemp', 'Floor 2: R. Battery Suhu', _f2BattTempCtrl.text);
+    verify('f2BattHum', 'Floor 2: R. Battery RH', _f2BattHumCtrl.text);
+    verify('f2RectiTemp', 'Floor 2: R. Rectifier Suhu', _f2RectiTempCtrl.text);
+    verify('f2RectiHum', 'Floor 2: R. Rectifier RH', _f2RectiHumCtrl.text);
+    verify('f2MscTemp', 'Floor 2: R. Msc Suhu', _f2MscTempCtrl.text);
+    verify('f2MscHum', 'Floor 2: R. Msc RH', _f2MscHumCtrl.text);
+    verify('f2CspsTemp', 'Floor 2: R. Csps Suhu', _f2CspsTempCtrl.text);
+    verify('f2CspsHum', 'Floor 2: R. Csps RH', _f2CspsHumCtrl.text);
+
+    verify('f3BattTemp', 'Floor 3: R. Battery Suhu', _f3BattTempCtrl.text);
+    verify('f3BattHum', 'Floor 3: R. Battery RH', _f3BattHumCtrl.text);
+    verify('f3RectiTemp', 'Floor 3: R. Rectifier Suhu', _f3RectiTempCtrl.text);
+    verify('f3RectiHum', 'Floor 3: R. Rectifier RH', _f3RectiHumCtrl.text);
+    verify('f3InvasTemp', 'Floor 3: R. Invas Suhu', _f3InvasTempCtrl.text);
+    verify('f3InvasHum', 'Floor 3: R. Invas RH', _f3InvasHumCtrl.text);
+    verify('f3CoreTemp', 'Floor 3: R. Core Suhu', _f3CoreTempCtrl.text);
+    verify('f3CoreHum', 'Floor 3: R. Core RH', _f3CoreHumCtrl.text);
+    verify('f3MkiosTemp', 'Floor 3: R. Mkios Suhu', _f3MkiosTempCtrl.text);
+    verify('f3MkiosHum', 'Floor 3: R. Mkios RH', _f3MkiosHumCtrl.text);
+    verify('f3OcsTemp', 'Floor 3: R. Ocs Suhu', _f3OcsTempCtrl.text);
+    verify('f3OcsHum', 'Floor 3: R. Ocs RH', _f3OcsHumCtrl.text);
+
+    verify('f4BattTemp', 'Floor 4: R. Battery Suhu', _f4BattTempCtrl.text);
+    verify('f4BattHum', 'Floor 4: R. Battery RH', _f4BattHumCtrl.text);
+    verify('f4RectiTemp', 'Floor 4: R. Rectifier Suhu', _f4RectiTempCtrl.text);
+    verify('f4RectiHum', 'Floor 4: R. Rectifier RH', _f4RectiHumCtrl.text);
+    verify('f4BscRncTemp', 'Floor 4: R. BSC RNC Suhu', _f4BscRncTempCtrl.text);
+    verify('f4BscRncHum', 'Floor 4: R. BSC RNC RH', _f4BscRncHumCtrl.text);
+    verify('f4InterTemp', 'Floor 4: R. Interkoneksi Suhu', _f4InterTempCtrl.text);
+    verify('f4InterHum', 'Floor 4: R. Interkoneksi RH', _f4InterHumCtrl.text);
+    verify('f4TransTemp', 'Floor 4: R. Transmisi Suhu', _f4TransTempCtrl.text);
+    verify('f4TransHum', 'Floor 4: R. Transmisi RH', _f4TransHumCtrl.text);
+
+    verify('f5UtilATemp', 'Floor 5: R. Utility A Suhu', _f5UtilATempCtrl.text);
+    verify('f5UtilAHum', 'Floor 5: R. Utility A RH', _f5UtilAHumCtrl.text);
+    verify('f5UtilBTemp', 'Floor 5: R. Utility B Suhu', _f5UtilBTempCtrl.text);
+    verify('f5UtilBHum', 'Floor 5: R. Utility B RH', _f5UtilBHumCtrl.text);
+    verify('f5DcTemp', 'Floor 5: R. Data Center Suhu', _f5DcTempCtrl.text);
+    verify('f5DcHum', 'Floor 5: R. Data Center RH', _f5DcHumCtrl.text);
+
+    for (int i = 0; i < _rects.length; i++) {
+      final num = (i + 1).toString().padLeft(2, '0');
+      verify('rect_${i}_kw', 'Rect. $num Load (KW)', _rects[i].kwCtrl.text);
+      verify('rect_${i}_volt', 'Rect. $num Voltage', _rects[i].voltCtrl.text);
+      verify('rect_${i}_occ', 'Rect. $num Occupancy', _rects[i].occCtrl.text);
+    }
+
+    void checkUps(String code, UpsItem ups) {
+      verify('ups_${code}_kw', 'UPS $code Load (KW)', ups.kwCtrl.text);
+      verify('ups_${code}_occ', 'UPS $code Occupancy (%)', ups.occCtrl.text);
+      verify('ups_${code}_volt', 'UPS $code Batt Volt', ups.voltCtrl.text);
+      verify('ups_${code}_pct', 'UPS $code Batt %', ups.pctCtrl.text);
+      verify('ups_${code}_runtime', 'UPS $code Est. Runtime', ups.runtimeCtrl.text);
+    }
+
+    checkUps('2.02', _ups202);
+    checkUps('2.03', _ups203);
+    checkUps('3.01', _ups301);
+    checkUps('3.02', _ups302);
+    checkUps('5.01', _ups501);
+    checkUps('5.02', _ups502);
+
     return (zeroList: zeroList, sameList: sameList);
   }
 
@@ -680,7 +808,156 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   }
 
   void _onGenerateButtonPressed() {
-    // Jalankan eksekusi utama langsung
+    final bbmLimitErrors = _validateBbmLimits();
+    if (bbmLimitErrors.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Text('Batas Maksimum BBM', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Data BBM yang diisi melebihi kapasitas operasional maksimum:',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                const SizedBox(height: 10),
+                ...bbmLimitErrors.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('• ', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text(e, style: const TextStyle(fontSize: 12.5, color: Colors.black87)),
+                      ),
+                    ],
+                  ),
+                )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                setState(() => _currentTab = 0);
+              },
+              child: const Text('Perbaiki di Tab 1', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final warnings = _checkZeroAndSameWarnings();
+    final hasZero = warnings.zeroList.isNotEmpty;
+    final hasSame = warnings.sameList.isNotEmpty;
+
+    if (hasZero || hasSame) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800, size: 28),
+              const SizedBox(width: 8),
+              const Text('Konfirmasi Peringatan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.55,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Periksa kembali sebelum melanjutkan pengiriman:',
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  if (hasZero) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(6)),
+                      child: Text(
+                        'Kolom Masih Bernilai 0 (${warnings.zeroList.length}):',
+                        style: TextStyle(color: Colors.red.shade900, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ...warnings.zeroList.map((e) => Padding(
+                      padding: const EdgeInsets.only(left: 6, bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                          Expanded(child: Text(e, style: const TextStyle(fontSize: 12))),
+                        ],
+                      ),
+                    )),
+                    const SizedBox(height: 12),
+                  ],
+                  if (hasSame) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(6)),
+                      child: Text(
+                        'Belum Berubah dari Kemarin (${warnings.sameList.length}):',
+                        style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ...warnings.sameList.map((e) => Padding(
+                      padding: const EdgeInsets.only(left: 6, bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('• ', style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.bold)),
+                          Expanded(child: Text(e, style: const TextStyle(fontSize: 12))),
+                        ],
+                      ),
+                    )),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Periksa Kembali'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _executeGenerateReport();
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
+              child: const Text('Tetap Generate & Kirim', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     _executeGenerateReport();
   }
 
