@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 import 'package:forui/forui.dart';
 import 'pages/home_page.dart';
 
-void main() {
+Future<void> main() async {
+  // Pastikan binding framework Flutter sudah siap sebelum memanggil fungsi async
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Muat file environment
+  await dotenv.load(fileName: ".env");
+
   runApp(const ChecklistGedungApp());
 }
 
 class ChecklistGedungApp extends StatelessWidget {
   const ChecklistGedungApp({super.key});
 
-  // Warna Utama dari Logo
   static const Color primaryRed = Color(0xFFE71E26);
 
   @override
