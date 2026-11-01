@@ -63,36 +63,36 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   // --- TAB 1 CONTROLLERS ---
   String _statusPln = 'ON';
-  final _kwhCtrl = TextEditingController(text: '0');
+  final _kwhCtrl = TextEditingController();
 
-  final _failedGensetCtrl = TextEditingController(text: '0');
-  final _failedPacCtrl = TextEditingController(text: '0');
-  final _failedRectiCtrl = TextEditingController(text: '0');
-  final _failedUpsCtrl = TextEditingController(text: '0');
+  final _failedGensetCtrl = TextEditingController();
+  final _failedPacCtrl = TextEditingController();
+  final _failedRectiCtrl = TextEditingController();
+  final _failedUpsCtrl = TextEditingController();
 
-  final _lvmdpKvaCtrl = TextEditingController(text: '0');
-  final _lvmdpKwCtrl = TextEditingController(text: '0');
-  final _lvmdpCosPhiCtrl = TextEditingController(text: '0');
-  final _lvmdpRsCtrl = TextEditingController(text: '0');
-  final _lvmdpSnCtrl = TextEditingController(text: '0');
-  final _lvmdpTnCtrl = TextEditingController(text: '0');
-  final _lvmdpNgCtrl = TextEditingController(text: '0');
-  final _lvmdpArusRCtrl = TextEditingController(text: '0');
-  final _lvmdpArusSCtrl = TextEditingController(text: '0');
-  final _lvmdpArusTCtrl = TextEditingController(text: '0');
+  final _lvmdpKvaCtrl = TextEditingController();
+  final _lvmdpKwCtrl = TextEditingController();
+  final _lvmdpCosPhiCtrl = TextEditingController();
+  final _lvmdpRsCtrl = TextEditingController();
+  final _lvmdpSnCtrl = TextEditingController();
+  final _lvmdpTnCtrl = TextEditingController();
+  final _lvmdpNgCtrl = TextEditingController();
+  final _lvmdpArusRCtrl = TextEditingController();
+  final _lvmdpArusSCtrl = TextEditingController();
+  final _lvmdpArusTCtrl = TextEditingController();
 
   String _genset1Mode = 'Standby Auto';
   String _genset2Mode = 'Standby Auto';
   String _genset3Mode = 'Standby Auto';
-  final _smuGenset1Ctrl = TextEditingController(text: '0');
-  final _voltGenset1Ctrl = TextEditingController(text: '0');
-  final _suhuGenset1Ctrl = TextEditingController(text: '0');
-  final _smuGenset2Ctrl = TextEditingController(text: '0');
-  final _voltGenset2Ctrl = TextEditingController(text: '0');
-  final _suhuGenset2Ctrl = TextEditingController(text: '0');
-  final _smuGenset3Ctrl = TextEditingController(text: '0');
-  final _voltGenset3Ctrl = TextEditingController(text: '0');
-  final _suhuGenset3Ctrl = TextEditingController(text: '0');
+  final _smuGenset1Ctrl = TextEditingController();
+  final _voltGenset1Ctrl = TextEditingController();
+  final _suhuGenset1Ctrl = TextEditingController();
+  final _smuGenset2Ctrl = TextEditingController();
+  final _voltGenset2Ctrl = TextEditingController();
+  final _suhuGenset2Ctrl = TextEditingController();
+  final _smuGenset3Ctrl = TextEditingController();
+  final _voltGenset3Ctrl = TextEditingController();
+  final _suhuGenset3Ctrl = TextEditingController();
 
   static const double _tB1Panjang = 450.0;
   static const double _tB1Diameter = 182.0;
@@ -107,50 +107,50 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   static const double _maxHeightH12 = 84.0;
   static const double _maxLiterH12 = 1500.0;
 
-  final _bbmB1TinggiCtrl = TextEditingController(text: '0');
-  final _bbmB1LiterCtrl = TextEditingController(text: '0');
-  final _bbmB2TinggiCtrl = TextEditingController(text: '0');
-  final _bbmB2LiterCtrl = TextEditingController(text: '0');
-  final _bbmB3TinggiCtrl = TextEditingController(text: '0');
-  final _bbmB3LiterCtrl = TextEditingController(text: '0');
-  final _bbmH1TinggiCtrl = TextEditingController(text: '0');
-  final _bbmH1LiterCtrl = TextEditingController(text: '0');
-  final _bbmH2TinggiCtrl = TextEditingController(text: '0');
-  final _bbmH2LiterCtrl = TextEditingController(text: '0');
+  final _bbmB1TinggiCtrl = TextEditingController();
+  final _bbmB1LiterCtrl = TextEditingController();
+  final _bbmB2TinggiCtrl = TextEditingController();
+  final _bbmB2LiterCtrl = TextEditingController();
+  final _bbmB3TinggiCtrl = TextEditingController();
+  final _bbmB3LiterCtrl = TextEditingController();
+  final _bbmH1TinggiCtrl = TextEditingController();
+  final _bbmH1LiterCtrl = TextEditingController();
+  final _bbmH2TinggiCtrl = TextEditingController();
+  final _bbmH2LiterCtrl = TextEditingController();
 
-  final _totalSolarCtrl = TextEditingController(text: '0');
+  final _totalSolarCtrl = TextEditingController();
   final _backupTimeCtrl = TextEditingController(text: '0 Jam/0 Hari');
 
-  final _f1GensetTempCtrl = TextEditingController(text: '0');
-  final _f1GensetHumCtrl = TextEditingController(text: '0');
-  final _f1TrafoTempCtrl = TextEditingController(text: '0');
-  final _f1TrafoHumCtrl = TextEditingController(text: '0');
+  final _f1GensetTempCtrl = TextEditingController();
+  final _f1GensetHumCtrl = TextEditingController();
+  final _f1TrafoTempCtrl = TextEditingController();
+  final _f1TrafoHumCtrl = TextEditingController();
 
   // --- TAB 2 CONTROLLERS ---
-  final _f2BattTempCtrl = TextEditingController(text: '0');
-  final _f2BattHumCtrl = TextEditingController(text: '0');
-  final _f2RectiTempCtrl = TextEditingController(text: '0');
-  final _f2RectiHumCtrl = TextEditingController(text: '0');
-  final _f2MscTempCtrl = TextEditingController(text: '0');
-  final _f2MscHumCtrl = TextEditingController(text: '0');
-  final _f2CspsTempCtrl = TextEditingController(text: '0');
-  final _f2CspsHumCtrl = TextEditingController(text: '0');
+  final _f2BattTempCtrl = TextEditingController();
+  final _f2BattHumCtrl = TextEditingController();
+  final _f2RectiTempCtrl = TextEditingController();
+  final _f2RectiHumCtrl = TextEditingController();
+  final _f2MscTempCtrl = TextEditingController();
+  final _f2MscHumCtrl = TextEditingController();
+  final _f2CspsTempCtrl = TextEditingController();
+  final _f2CspsHumCtrl = TextEditingController();
 
   late final List<RectifierItem> _rects = List.generate(
     13, (index) => RectifierItem(
     name: 'Rect. ${(index + 1).toString().padLeft(2, '0')} HUAWEI',
-    kwCtrl: TextEditingController(text: '0'),
-    voltCtrl: TextEditingController(text: '0'),
-    occCtrl: TextEditingController(text: '0'),
+    kwCtrl: TextEditingController(),
+    voltCtrl: TextEditingController(),
+    occCtrl: TextEditingController(),
   ),
   );
 
   UpsItem _createUps() => UpsItem(
-    kwCtrl: TextEditingController(text: '0'),
-    occCtrl: TextEditingController(text: '0'),
-    voltCtrl: TextEditingController(text: '0'),
-    pctCtrl: TextEditingController(text: '0'),
-    runtimeCtrl: TextEditingController(text: '0'),
+    kwCtrl: TextEditingController(),
+    occCtrl: TextEditingController(),
+    voltCtrl: TextEditingController(),
+    pctCtrl: TextEditingController(),
+    runtimeCtrl: TextEditingController(),
   );
 
   late final _ups202 = _createUps();
@@ -161,38 +161,38 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   late final _ups502 = _createUps();
 
   // --- TAB 3 CONTROLLERS ---
-  final _f3BattTempCtrl = TextEditingController(text: '0');
-  final _f3BattHumCtrl = TextEditingController(text: '0');
-  final _f3RectiTempCtrl = TextEditingController(text: '0');
-  final _f3RectiHumCtrl = TextEditingController(text: '0');
-  final _f3InvasTempCtrl = TextEditingController(text: '0');
-  final _f3InvasHumCtrl = TextEditingController(text: '0');
-  final _f3CoreTempCtrl = TextEditingController(text: '0');
-  final _f3CoreHumCtrl = TextEditingController(text: '0');
-  final _f3MkiosTempCtrl = TextEditingController(text: '0');
-  final _f3MkiosHumCtrl = TextEditingController(text: '0');
-  final _f3OcsTempCtrl = TextEditingController(text: '0');
-  final _f3OcsHumCtrl = TextEditingController(text: '0');
+  final _f3BattTempCtrl = TextEditingController();
+  final _f3BattHumCtrl = TextEditingController();
+  final _f3RectiTempCtrl = TextEditingController();
+  final _f3RectiHumCtrl = TextEditingController();
+  final _f3InvasTempCtrl = TextEditingController();
+  final _f3InvasHumCtrl = TextEditingController();
+  final _f3CoreTempCtrl = TextEditingController();
+  final _f3CoreHumCtrl = TextEditingController();
+  final _f3MkiosTempCtrl = TextEditingController();
+  final _f3MkiosHumCtrl = TextEditingController();
+  final _f3OcsTempCtrl = TextEditingController();
+  final _f3OcsHumCtrl = TextEditingController();
 
   // --- TAB 4 CONTROLLERS ---
-  final _f4BattTempCtrl = TextEditingController(text: '0');
-  final _f4BattHumCtrl = TextEditingController(text: '0');
-  final _f4RectiTempCtrl = TextEditingController(text: '0');
-  final _f4RectiHumCtrl = TextEditingController(text: '0');
-  final _f4BscRncTempCtrl = TextEditingController(text: '0');
-  final _f4BscRncHumCtrl = TextEditingController(text: '0');
-  final _f4InterTempCtrl = TextEditingController(text: '0');
-  final _f4InterHumCtrl = TextEditingController(text: '0');
-  final _f4TransTempCtrl = TextEditingController(text: '0');
-  final _f4TransHumCtrl = TextEditingController(text: '0');
+  final _f4BattTempCtrl = TextEditingController();
+  final _f4BattHumCtrl = TextEditingController();
+  final _f4RectiTempCtrl = TextEditingController();
+  final _f4RectiHumCtrl = TextEditingController();
+  final _f4BscRncTempCtrl = TextEditingController();
+  final _f4BscRncHumCtrl = TextEditingController();
+  final _f4InterTempCtrl = TextEditingController();
+  final _f4InterHumCtrl = TextEditingController();
+  final _f4TransTempCtrl = TextEditingController();
+  final _f4TransHumCtrl = TextEditingController();
 
   // --- TAB 5 CONTROLLERS ---
-  final _f5UtilATempCtrl = TextEditingController(text: '0');
-  final _f5UtilAHumCtrl = TextEditingController(text: '0');
-  final _f5UtilBTempCtrl = TextEditingController(text: '0');
-  final _f5UtilBHumCtrl = TextEditingController(text: '0');
-  final _f5DcTempCtrl = TextEditingController(text: '0');
-  final _f5DcHumCtrl = TextEditingController(text: '0');
+  final _f5UtilATempCtrl = TextEditingController();
+  final _f5UtilAHumCtrl = TextEditingController();
+  final _f5UtilBTempCtrl = TextEditingController();
+  final _f5UtilBHumCtrl = TextEditingController();
+  final _f5DcTempCtrl = TextEditingController();
+  final _f5DcHumCtrl = TextEditingController();
 
   String _generatedReportText = '';
 
@@ -275,43 +275,43 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       try {
         final data = jsonDecode(jsonStr) as Map<String, dynamic>;
         setState(() {
-          _statusPln = data['statusPln'] ?? 'ON'; _kwhCtrl.text = data['kwh'] ?? '0';
-          _failedGensetCtrl.text = data['failedGenset'] ?? '0'; _failedPacCtrl.text = data['failedPac'] ?? '0'; _failedRectiCtrl.text = data['failedRecti'] ?? '0'; _failedUpsCtrl.text = data['failedUps'] ?? '0';
-          _lvmdpKvaCtrl.text = data['lvmdpKva'] ?? '0'; _lvmdpKwCtrl.text = data['lvmdpKw'] ?? '0'; _lvmdpCosPhiCtrl.text = data['lvmdpCosPhi'] ?? '0'; _lvmdpRsCtrl.text = data['lvmdpRs'] ?? '0'; _lvmdpSnCtrl.text = data['lvmdpSn'] ?? '0'; _lvmdpTnCtrl.text = data['lvmdpTn'] ?? '0'; _lvmdpNgCtrl.text = data['lvmdpNg'] ?? '0'; _lvmdpArusRCtrl.text = data['lvmdpArusR'] ?? '0'; _lvmdpArusSCtrl.text = data['lvmdpArusS'] ?? '0'; _lvmdpArusTCtrl.text = data['lvmdpArusT'] ?? '0';
+          _statusPln = data['statusPln'] ?? 'ON'; _kwhCtrl.text = data['kwh'] ?? '';
+          _failedGensetCtrl.text = data['failedGenset'] ?? ''; _failedPacCtrl.text = data['failedPac'] ?? ''; _failedRectiCtrl.text = data['failedRecti'] ?? ''; _failedUpsCtrl.text = data['failedUps'] ?? '';
+          _lvmdpKvaCtrl.text = data['lvmdpKva'] ?? ''; _lvmdpKwCtrl.text = data['lvmdpKw'] ?? ''; _lvmdpCosPhiCtrl.text = data['lvmdpCosPhi'] ?? ''; _lvmdpRsCtrl.text = data['lvmdpRs'] ?? ''; _lvmdpSnCtrl.text = data['lvmdpSn'] ?? ''; _lvmdpTnCtrl.text = data['lvmdpTn'] ?? ''; _lvmdpNgCtrl.text = data['lvmdpNg'] ?? ''; _lvmdpArusRCtrl.text = data['lvmdpArusR'] ?? ''; _lvmdpArusSCtrl.text = data['lvmdpArusS'] ?? ''; _lvmdpArusTCtrl.text = data['lvmdpArusT'] ?? '';
           _genset1Mode = data['genset1Mode'] ?? 'Standby Auto'; _genset2Mode = data['genset2Mode'] ?? 'Standby Auto'; _genset3Mode = data['genset3Mode'] ?? 'Standby Auto';
-          _smuGenset1Ctrl.text = data['smuGenset1'] ?? '0'; _voltGenset1Ctrl.text = data['voltGenset1'] ?? '0'; _suhuGenset1Ctrl.text = data['suhuGenset1'] ?? '0';
-          _smuGenset2Ctrl.text = data['smuGenset2'] ?? '0'; _voltGenset2Ctrl.text = data['voltGenset2'] ?? '0'; _suhuGenset2Ctrl.text = data['suhuGenset2'] ?? '0';
-          _smuGenset3Ctrl.text = data['smuGenset3'] ?? '0'; _voltGenset3Ctrl.text = data['voltGenset3'] ?? '0'; _suhuGenset3Ctrl.text = data['suhuGenset3'] ?? '0';
-          _bbmB1TinggiCtrl.text = data['bbmB1Tinggi'] ?? '0'; _bbmB1LiterCtrl.text = data['bbmB1Liter'] ?? '0'; _bbmB2TinggiCtrl.text = data['bbmB2Tinggi'] ?? '0'; _bbmB2LiterCtrl.text = data['bbmB2Liter'] ?? '0'; _bbmB3TinggiCtrl.text = data['bbmB3Tinggi'] ?? '0'; _bbmB3LiterCtrl.text = data['bbmB3Liter'] ?? '0'; _bbmH1TinggiCtrl.text = data['bbmH1Tinggi'] ?? '0'; _bbmH1LiterCtrl.text = data['bbmH1Liter'] ?? '0'; _bbmH2TinggiCtrl.text = data['bbmH2Tinggi'] ?? '0'; _bbmH2LiterCtrl.text = data['bbmH2Liter'] ?? '0';
-          _totalSolarCtrl.text = data['totalSolar'] ?? '0'; _backupTimeCtrl.text = data['backupTime'] ?? '0 Jam/0 Hari';
-          _f1GensetTempCtrl.text = data['f1GensetTemp'] ?? '0'; _f1GensetHumCtrl.text = data['f1GensetHum'] ?? '0'; _f1TrafoTempCtrl.text = data['f1TrafoTemp'] ?? '0'; _f1TrafoHumCtrl.text = data['f1TrafoHum'] ?? '0';
-          _f2BattTempCtrl.text = data['f2BattTemp'] ?? '0'; _f2BattHumCtrl.text = data['f2BattHum'] ?? '0'; _f2RectiTempCtrl.text = data['f2RectiTemp'] ?? '0'; _f2RectiHumCtrl.text = data['f2RectiHum'] ?? '0'; _f2MscTempCtrl.text = data['f2MscTemp'] ?? '0'; _f2MscHumCtrl.text = data['f2MscHum'] ?? '0'; _f2CspsTempCtrl.text = data['f2CspsTemp'] ?? '0'; _f2CspsHumCtrl.text = data['f2CspsHum'] ?? '0';
+          _smuGenset1Ctrl.text = data['smuGenset1'] ?? ''; _voltGenset1Ctrl.text = data['voltGenset1'] ?? ''; _suhuGenset1Ctrl.text = data['suhuGenset1'] ?? '';
+          _smuGenset2Ctrl.text = data['smuGenset2'] ?? ''; _voltGenset2Ctrl.text = data['voltGenset2'] ?? ''; _suhuGenset2Ctrl.text = data['suhuGenset2'] ?? '';
+          _smuGenset3Ctrl.text = data['smuGenset3'] ?? ''; _voltGenset3Ctrl.text = data['voltGenset3'] ?? ''; _suhuGenset3Ctrl.text = data['suhuGenset3'] ?? '';
+          _bbmB1TinggiCtrl.text = data['bbmB1Tinggi'] ?? ''; _bbmB1LiterCtrl.text = data['bbmB1Liter'] ?? ''; _bbmB2TinggiCtrl.text = data['bbmB2Tinggi'] ?? ''; _bbmB2LiterCtrl.text = data['bbmB2Liter'] ?? ''; _bbmB3TinggiCtrl.text = data['bbmB3Tinggi'] ?? ''; _bbmB3LiterCtrl.text = data['bbmB3Liter'] ?? ''; _bbmH1TinggiCtrl.text = data['bbmH1Tinggi'] ?? ''; _bbmH1LiterCtrl.text = data['bbmH1Liter'] ?? ''; _bbmH2TinggiCtrl.text = data['bbmH2Tinggi'] ?? ''; _bbmH2LiterCtrl.text = data['bbmH2Liter'] ?? '';
+          _totalSolarCtrl.text = data['totalSolar'] ?? ''; _backupTimeCtrl.text = data['backupTime'] ?? '0 Jam/0 Hari';
+          _f1GensetTempCtrl.text = data['f1GensetTemp'] ?? ''; _f1GensetHumCtrl.text = data['f1GensetHum'] ?? ''; _f1TrafoTempCtrl.text = data['f1TrafoTemp'] ?? ''; _f1TrafoHumCtrl.text = data['f1TrafoHum'] ?? '';
+          _f2BattTempCtrl.text = data['f2BattTemp'] ?? ''; _f2BattHumCtrl.text = data['f2BattHum'] ?? ''; _f2RectiTempCtrl.text = data['f2RectiTemp'] ?? ''; _f2RectiHumCtrl.text = data['f2RectiHum'] ?? ''; _f2MscTempCtrl.text = data['f2MscTemp'] ?? ''; _f2MscHumCtrl.text = data['f2MscHum'] ?? ''; _f2CspsTempCtrl.text = data['f2CspsTemp'] ?? ''; _f2CspsHumCtrl.text = data['f2CspsHum'] ?? '';
 
           if (data['rects'] != null) {
             final list = data['rects'] as List<dynamic>;
             for (int i = 0; i < math.min(list.length, _rects.length); i++) {
-              _rects[i].kwCtrl.text = list[i]['kw'] ?? '0';
-              _rects[i].voltCtrl.text = list[i]['volt'] ?? '0';
-              _rects[i].occCtrl.text = list[i]['occ'] ?? '0';
+              _rects[i].kwCtrl.text = list[i]['kw'] ?? '';
+              _rects[i].voltCtrl.text = list[i]['volt'] ?? '';
+              _rects[i].occCtrl.text = list[i]['occ'] ?? '';
             }
           }
 
           void applyUps(UpsItem ups, Map<String, dynamic>? upsData) {
             if (upsData != null) {
-              ups.kwCtrl.text = upsData['kw'] ?? '0';
-              ups.occCtrl.text = upsData['occ'] ?? '0';
-              ups.voltCtrl.text = upsData['volt'] ?? '0';
-              ups.pctCtrl.text = upsData['pct'] ?? '0';
-              ups.runtimeCtrl.text = upsData['runtime'] ?? '0';
+              ups.kwCtrl.text = upsData['kw'] ?? '';
+              ups.occCtrl.text = upsData['occ'] ?? '';
+              ups.voltCtrl.text = upsData['volt'] ?? '';
+              ups.pctCtrl.text = upsData['pct'] ?? '';
+              ups.runtimeCtrl.text = upsData['runtime'] ?? '';
             }
           }
           applyUps(_ups202, data['ups202']); applyUps(_ups203, data['ups203']);
           applyUps(_ups301, data['ups301']); applyUps(_ups302, data['ups302']);
           applyUps(_ups501, data['ups501']); applyUps(_ups502, data['ups502']);
 
-          _f3BattTempCtrl.text = data['f3BattTemp'] ?? '0'; _f3BattHumCtrl.text = data['f3BattHum'] ?? '0'; _f3RectiTempCtrl.text = data['f3RectiTemp'] ?? '0'; _f3RectiHumCtrl.text = data['f3RectiHum'] ?? '0'; _f3InvasTempCtrl.text = data['f3InvasTemp'] ?? '0'; _f3InvasHumCtrl.text = data['f3InvasHum'] ?? '0'; _f3CoreTempCtrl.text = data['f3CoreTemp'] ?? '0'; _f3CoreHumCtrl.text = data['f3CoreHum'] ?? '0'; _f3MkiosTempCtrl.text = data['f3MkiosTemp'] ?? '0'; _f3MkiosHumCtrl.text = data['f3MkiosHum'] ?? '0'; _f3OcsTempCtrl.text = data['f3OcsTemp'] ?? '0'; _f3OcsHumCtrl.text = data['f3OcsHum'] ?? '0';
-          _f4BattTempCtrl.text = data['f4BattTemp'] ?? '0'; _f4BattHumCtrl.text = data['f4BattHum'] ?? '0'; _f4RectiTempCtrl.text = data['f4RectiTemp'] ?? '0'; _f4RectiHumCtrl.text = data['f4RectiHum'] ?? '0'; _f4BscRncTempCtrl.text = data['f4BscRncTemp'] ?? '0'; _f4BscRncHumCtrl.text = data['f4BscRncHum'] ?? '0'; _f4InterTempCtrl.text = data['f4InterTemp'] ?? '0'; _f4InterHumCtrl.text = data['f4InterHum'] ?? '0'; _f4TransTempCtrl.text = data['f4TransTemp'] ?? '0'; _f4TransHumCtrl.text = data['f4TransHum'] ?? '0';
-          _f5UtilATempCtrl.text = data['f5UtilATemp'] ?? '0'; _f5UtilAHumCtrl.text = data['f5UtilAHum'] ?? '0'; _f5UtilBTempCtrl.text = data['f5UtilBTemp'] ?? '0'; _f5UtilBHumCtrl.text = data['f5UtilBHum'] ?? '0'; _f5DcTempCtrl.text = data['f5DcTemp'] ?? '0'; _f5DcHumCtrl.text = data['f5DcHum'] ?? '0';
+          _f3BattTempCtrl.text = data['f3BattTemp'] ?? ''; _f3BattHumCtrl.text = data['f3BattHum'] ?? ''; _f3RectiTempCtrl.text = data['f3RectiTemp'] ?? ''; _f3RectiHumCtrl.text = data['f3RectiHum'] ?? ''; _f3InvasTempCtrl.text = data['f3InvasTemp'] ?? ''; _f3InvasHumCtrl.text = data['f3InvasHum'] ?? ''; _f3CoreTempCtrl.text = data['f3CoreTemp'] ?? ''; _f3CoreHumCtrl.text = data['f3CoreHum'] ?? ''; _f3MkiosTempCtrl.text = data['f3MkiosTemp'] ?? ''; _f3MkiosHumCtrl.text = data['f3MkiosHum'] ?? ''; _f3OcsTempCtrl.text = data['f3OcsTemp'] ?? ''; _f3OcsHumCtrl.text = data['f3OcsHum'] ?? '';
+          _f4BattTempCtrl.text = data['f4BattTemp'] ?? ''; _f4BattHumCtrl.text = data['f4BattHum'] ?? ''; _f4RectiTempCtrl.text = data['f4RectiTemp'] ?? ''; _f4RectiHumCtrl.text = data['f4RectiHum'] ?? ''; _f4BscRncTempCtrl.text = data['f4BscRncTemp'] ?? ''; _f4BscRncHumCtrl.text = data['f4BscRncHum'] ?? ''; _f4InterTempCtrl.text = data['f4InterTemp'] ?? ''; _f4InterHumCtrl.text = data['f4InterHum'] ?? ''; _f4TransTempCtrl.text = data['f4TransTemp'] ?? ''; _f4TransHumCtrl.text = data['f4TransHum'] ?? '';
+          _f5UtilATempCtrl.text = data['f5UtilATemp'] ?? ''; _f5UtilAHumCtrl.text = data['f5UtilAHum'] ?? ''; _f5UtilBTempCtrl.text = data['f5UtilBTemp'] ?? ''; _f5UtilBHumCtrl.text = data['f5UtilBHum'] ?? ''; _f5DcTempCtrl.text = data['f5DcTemp'] ?? ''; _f5DcHumCtrl.text = data['f5DcHum'] ?? '';
 
           // Pastikan nilai cache pelaksana ada di list pelaksana baru (mencegah error Dropdown)
           if (data['pelaksana1'] != null && _listPelaksana.contains(data['pelaksana1'])) {
@@ -356,7 +356,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     );
 
     if (confirmed == true) {
-      for (final ctrl in _allControllers) { ctrl.text = '0'; }
+      for (final ctrl in _allControllers) { ctrl.text = ''; }
       _backupTimeCtrl.text = '0 Jam/0 Hari'; _statusPln = 'ON'; _genset1Mode = 'Standby Auto'; _genset2Mode = 'Standby Auto'; _genset3Mode = 'Standby Auto';
       setState(() {
         _generatedReportText = ''; _fotoKwh = null; _fotoLvmdpPqs = null; _fotoLvmdpArus = null; _fotoLvmdpVolt = null; _fotoLvmdpFreq = null; _fotoSmuGenset1 = null; _fotoSmuGenset2 = null; _fotoSmuGenset3 = null; _fotoContainmentSuhu = null; _fotoContainmentTablet = null;
@@ -1186,7 +1186,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
-        bottom: false,
+        // Hapus "bottom: false" agar SafeArea mengelola batas bawah dengan benar
         child: Column(
           children: [
             FHeader.nested(
@@ -1194,6 +1194,8 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
               prefixes: [FHeaderAction.back(onPress: () => Navigator.of(context).pop())],
               suffixes: [FHeaderAction(icon: const Icon(Icons.refresh, size: 20), onPress: _resetForm)],
             ),
+
+            // Area Form yang bisa di-scroll
             Expanded(
               child: IndexedStack(
                 index: _currentTab,
@@ -1202,23 +1204,24 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
                 ],
               ),
             ),
+
+            // PINDAHKAN PILL BAR KE SINI
+            // Berada di dalam Column body, posisinya akan otomatis terdorong keyboard
+            Container(
+              // height: 48,
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: _buildFloatingPillBar(),
+            ),
           ],
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Container(
-          height: 48,
-          margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: _buildFloatingPillBar(),
-        ),
-      ),
+      // Hapus properti bottomNavigationBar sepenuhnya dari sini
     );
   }
 
   Widget _buildFloatingPillBar() {
     return Container(
-      height: 48,
+      height: 68,
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1237,16 +1240,16 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
                 setState(() => _currentTab = index);
               },
               child: Container(
-                height: 40,
+                height: 58,
                 decoration: BoxDecoration(
                   color: isSelected ? primaryRed : Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(25),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   _tabs[index],
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 13,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     color: isSelected ? Colors.white : Colors.black87,
                   ),

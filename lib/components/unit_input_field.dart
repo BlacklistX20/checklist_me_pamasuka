@@ -58,9 +58,6 @@ class UnitInputField extends StatelessWidget {
                   child: ValueListenableBuilder<TextEditingValue>(
                     valueListenable: controller,
                     builder: (context, value, child) {
-                      // Tombol clear muncul jika teks tidak kosong dan bukan "0"
-                      final showClear = value.text.isNotEmpty && value.text != '0';
-
                       return TextFormField(
                         controller: controller,
                         enabled: enabled,
@@ -76,21 +73,10 @@ class UnitInputField extends StatelessWidget {
                         ),
                         decoration: InputDecoration(
                           border: InputBorder.none,
+                          hintText: '0',
+                          hintStyle: const TextStyle(color: Colors.grey),
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                          suffixIconConstraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                          suffixIcon: showClear && enabled
-                              ? GestureDetector(
-                            onTap: () {
-                              controller.text = '0';
-                              controller.selection = TextSelection.fromPosition(
-                                const TextPosition(offset: 1),
-                              );
-                              if (onChanged != null) onChanged!('0');
-                            },
-                            child: const Icon(Icons.cancel, size: 14, color: Colors.grey),
-                          )
-                              : null,
                         ),
                       );
                     },
