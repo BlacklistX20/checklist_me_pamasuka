@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -9,10 +10,10 @@ import 'package:forui/forui.dart';
 import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:http/http.dart' as http; // Tambahan Library HTTP
 
 // Komponen Modular
 import '../components/unit_input_field.dart';
@@ -21,9 +22,15 @@ import '../components/failed_devices_card.dart';
 import '../components/lvmdp_card.dart';
 import '../components/genset_card.dart';
 import '../components/tank_card.dart';
+import '../components/number_utils.dart';
+import '../components/app_notifier.dart';
+import '../components/apps_script_client.dart';
+import '../components/pin_auth.dart';
 import '../components/room_temp_card.dart';
 import '../components/rectifier_card.dart';
 import '../components/ups_card.dart';
+
+enum _SubmitOutcome { success, rejected, failed }
 
 class TtcSudiangPage extends StatefulWidget {
   const TtcSudiangPage({super.key});
@@ -57,9 +64,10 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   XFile? _fotoContainmentTablet;
 
   // Pelaksana
-  List<String> _listPelaksana = ['Loading...'];
-  String _pelaksana1 = 'Loading...';
-  String _pelaksana2 = 'Loading...';
+  List<String> _listPelaksana = [];
+  String? _pelaksana1; // null = belum dipilih
+  String? _pelaksana2;
+  String? _pelaksanaError;
 
   // --- TAB 1 CONTROLLERS ---
   String _statusPln = 'ON';
@@ -195,6 +203,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   final _f5DcHumCtrl = TextEditingController();
 
   String _generatedReportText = '';
+  bool _reportSubmitted = false; // true hanya jika server membalas sukses
+  String _submitNote = ''; // alasan terakhir gagal/ditolak (untuk status preview)
+  Map<String, dynamic>? _pendingSubmission; // laporan yang belum berhasil terkirim (disimpan di perangkat)
 
   List<TextEditingController> get _allControllers => [
     _kwhCtrl, _failedGensetCtrl, _failedPacCtrl, _failedRectiCtrl, _failedUpsCtrl,
@@ -237,6 +248,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       'totalSolar': _totalSolarCtrl.text, 'backupTime': _backupTimeCtrl.text,
       'f1GensetTemp': _f1GensetTempCtrl.text, 'f1GensetHum': _f1GensetHumCtrl.text, 'f1TrafoTemp': _f1TrafoTempCtrl.text, 'f1TrafoHum': _f1TrafoHumCtrl.text,
       'f2BattTemp': _f2BattTempCtrl.text, 'f2BattHum': _f2BattHumCtrl.text, 'f2RectiTemp': _f2RectiTempCtrl.text, 'f2RectiHum': _f2RectiHumCtrl.text, 'f2MscTemp': _f2MscTempCtrl.text, 'f2MscHum': _f2MscHumCtrl.text, 'f2CspsTemp': _f2CspsTempCtrl.text, 'f2CspsHum': _f2CspsHumCtrl.text,
+      'f3BattTemp': _f3BattTempCtrl.text, 'f3BattHum': _f3BattHumCtrl.text, 'f3RectiTemp': _f3RectiTempCtrl.text, 'f3RectiHum': _f3RectiHumCtrl.text, 'f3InvasTemp': _f3InvasTempCtrl.text, 'f3InvasHum': _f3InvasHumCtrl.text, 'f3CoreTemp': _f3CoreTempCtrl.text, 'f3CoreHum': _f3CoreHumCtrl.text, 'f3MkiosTemp': _f3MkiosTempCtrl.text, 'f3MkiosHum': _f3MkiosHumCtrl.text, 'f3OcsTemp': _f3OcsTempCtrl.text, 'f3OcsHum': _f3OcsHumCtrl.text,
+      'f4BattTemp': _f4BattTempCtrl.text, 'f4BattHum': _f4BattHumCtrl.text, 'f4RectiTemp': _f4RectiTempCtrl.text, 'f4RectiHum': _f4RectiHumCtrl.text, 'f4BscRncTemp': _f4BscRncTempCtrl.text, 'f4BscRncHum': _f4BscRncHumCtrl.text, 'f4InterTemp': _f4InterTempCtrl.text, 'f4InterHum': _f4InterHumCtrl.text, 'f4TransTemp': _f4TransTempCtrl.text, 'f4TransHum': _f4TransHumCtrl.text,
+      'f5UtilATemp': _f5UtilATempCtrl.text, 'f5UtilAHum': _f5UtilAHumCtrl.text, 'f5UtilBTemp': _f5UtilBTempCtrl.text, 'f5UtilBHum': _f5UtilBHumCtrl.text, 'f5DcTemp': _f5DcTempCtrl.text, 'f5DcHum': _f5DcHumCtrl.text,
       'rects': _rects.map((r) => {'kw': r.kwCtrl.text, 'volt': r.voltCtrl.text, 'occ': r.occCtrl.text}).toList(),
       'ups202': { 'kw': _ups202.kwCtrl.text, 'occ': _ups202.occCtrl.text, 'volt': _ups202.voltCtrl.text, 'pct': _ups202.pctCtrl.text, 'runtime': _ups202.runtimeCtrl.text },
       'ups203': { 'kw': _ups203.kwCtrl.text, 'occ': _ups203.occCtrl.text, 'volt': _ups203.voltCtrl.text, 'pct': _ups203.pctCtrl.text, 'runtime': _ups203.runtimeCtrl.text },
@@ -250,24 +264,46 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   Future<void> _loadSavedFormData() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return; // halaman sudah ditutup sebelum data termuat
 
     // 1. Muat Config Teknisi dari Memori Lokal (Server-Driven)
     final configStr = prefs.getString('app_config');
     if (configStr != null) {
-      final config = jsonDecode(configStr);
-      final teknisiStr = config['TEKNISI_SUDIANG'] as String?;
-      if (teknisiStr != null && teknisiStr.isNotEmpty) {
-        setState(() {
-          _listPelaksana = teknisiStr.split(',').map((e) => e.trim()).toList();
-          _pelaksana1 = _listPelaksana.first;
-          _pelaksana2 = _listPelaksana.length > 1 ? _listPelaksana[1] : _listPelaksana.first;
-        });
+      try {
+        final config = jsonDecode(configStr);
+        final teknisiStr = config['TEKNISI_SUDIANG'] as String?;
+        if (teknisiStr != null && teknisiStr.isNotEmpty) {
+          // Buang entri kosong (koma di akhir) dan nama ganda agar Dropdown tidak crash.
+          final names = <String>[];
+          for (final raw in teknisiStr.split(',')) {
+            final name = raw.trim();
+            if (name.isNotEmpty && !names.contains(name)) names.add(name);
+          }
+          setState(() => _listPelaksana = names);
+        }
+      } catch (e) {
+        debugPrint('Config teknisi tidak valid: $e');
       }
     }
 
     final lastSubJson = prefs.getString('ttc_sudiang_last_submitted_report');
     if (lastSubJson != null && lastSubJson.isNotEmpty) {
       try { _lastSubmittedData = jsonDecode(lastSubJson) as Map<String, dynamic>; } catch (_) {}
+    }
+
+    // Laporan yang belum terkirim (misal karena offline) dipulihkan agar bisa dikirim ulang.
+    final pendingStr = prefs.getString(_pendingKey);
+    if (pendingStr != null && pendingStr.isNotEmpty) {
+      try {
+        final pending = Map<String, dynamic>.from(jsonDecode(pendingStr) as Map);
+        setState(() {
+          _pendingSubmission = pending;
+          _generatedReportText = (pending['reportText'] as String?) ?? '';
+          _submitNote = 'Laporan belum terkirim. Tekan "Kirim Ulang" saat sudah online.';
+        });
+      } catch (_) {
+        await prefs.remove(_pendingKey);
+      }
     }
 
     final jsonStr = prefs.getString('ttc_sudiang_form_data');
@@ -328,7 +364,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     for (final ctrl in _allControllers) {
       ctrl.addListener(() {
-        EasyDebounce.debounce('save-form-debouncer', const Duration(milliseconds: 500), () => _saveFormData());
+        EasyDebounce.debounce('ttc-sudiang-save-form', const Duration(milliseconds: 500), () => _saveFormData());
       });
     }
   }
@@ -355,14 +391,15 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       ),
     );
 
+    if (!mounted) return;
     if (confirmed == true) {
       for (final ctrl in _allControllers) { ctrl.text = ''; }
       _backupTimeCtrl.text = '0 Jam/0 Hari'; _statusPln = 'ON'; _genset1Mode = 'Standby Auto'; _genset2Mode = 'Standby Auto'; _genset3Mode = 'Standby Auto';
       setState(() {
-        _generatedReportText = ''; _fotoKwh = null; _fotoLvmdpPqs = null; _fotoLvmdpArus = null; _fotoLvmdpVolt = null; _fotoLvmdpFreq = null; _fotoSmuGenset1 = null; _fotoSmuGenset2 = null; _fotoSmuGenset3 = null; _fotoContainmentSuhu = null; _fotoContainmentTablet = null;
+        _generatedReportText = ''; _reportSubmitted = false; _fotoKwh = null; _fotoLvmdpPqs = null; _fotoLvmdpArus = null; _fotoLvmdpVolt = null; _fotoLvmdpFreq = null; _fotoSmuGenset1 = null; _fotoSmuGenset2 = null; _fotoSmuGenset3 = null; _fotoContainmentSuhu = null; _fotoContainmentTablet = null;
       });
       await _saveFormData();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Form berhasil direset ke 0!')));
+      AppNotifier.success('Form berhasil direset ke 0!');
     }
   }
 
@@ -381,13 +418,14 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         final compressedFile = await FlutterImageCompress.compressAndGetFile(
           photo.path, targetPath, quality: 60, minWidth: 1024, minHeight: 1024,
         );
+        if (!mounted) return;
         if (compressedFile != null) {
           setState(() { onSaved(XFile(compressedFile.path)); });
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Foto $title berhasil disimpan')));
+          AppNotifier.success('Foto $title berhasil disimpan');
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuka kamera: $e')));
+      AppNotifier.error('Gagal membuka kamera: $e');
     }
   }
 
@@ -428,15 +466,15 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Future<void> _downloadSingleCollage(int index) async {
     // Validasi Foto (Tetap sama, disingkat visualnya)
     if (index == 1 && (_fotoKwh == null || _fotoLvmdpArus == null || _fotoLvmdpPqs == null || _fotoLvmdpVolt == null || _fotoLvmdpFreq == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Foto belum lengkap!'))); return;
+      AppNotifier.error('Foto belum lengkap!'); return;
     } else if (index == 2 && (_fotoSmuGenset1 == null || _fotoSmuGenset2 == null || _fotoSmuGenset3 == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Foto Genset belum lengkap!'))); return;
-    } else if (index == 3 && (_fotoContainmentTablet == null && _fotoContainmentSuhu == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Foto Containment belum lengkap!'))); return;
+      AppNotifier.error('Foto Genset belum lengkap!'); return;
+    } else if (index == 3 && (_fotoContainmentTablet == null || _fotoContainmentSuhu == null)) {
+      AppNotifier.error('Foto Containment belum lengkap!'); return;
     }
 
     String collageName = '';
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(duration: Duration(seconds: 1), content: Text('Menyusun kolase...')));
+    AppNotifier.info('Menyusun kolase...', duration: const Duration(seconds: 1));
 
     try {
       final recorder = ui.PictureRecorder();
@@ -496,25 +534,23 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         if (!hasAccess) await Gal.requestAccess();
         await Gal.putImageBytes(pngBytes, name: '${collageName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: const Color(0xFF2E7D32), content: Text('$collageName berhasil disimpan ke Galeri HP!')),
-          );
+          AppNotifier.success('$collageName berhasil disimpan ke Galeri HP!');
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyimpan kolase: $e')));
+      AppNotifier.error('Gagal menyimpan kolase: $e');
     }
   }
 
   void _recalculateTotalBbm() {
-    final b1 = double.tryParse(_bbmB1LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
-    final b2 = double.tryParse(_bbmB2LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
-    final b3 = double.tryParse(_bbmB3LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
-    final h1 = double.tryParse(_bbmH1LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
-    final h2 = double.tryParse(_bbmH2LiterCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+    final b1 = NumberUtils.parseLiter(_bbmB1LiterCtrl.text) ?? 0;
+    final b2 = NumberUtils.parseLiter(_bbmB2LiterCtrl.text) ?? 0;
+    final b3 = NumberUtils.parseLiter(_bbmB3LiterCtrl.text) ?? 0;
+    final h1 = NumberUtils.parseLiter(_bbmH1LiterCtrl.text) ?? 0;
+    final h2 = NumberUtils.parseLiter(_bbmH2LiterCtrl.text) ?? 0;
 
     final total = (b1 + b2 + b3 + h1 + h2).round();
-    _totalSolarCtrl.text = total.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+    _totalSolarCtrl.text = NumberUtils.formatThousands(total);
     final hours = total > 0 ? (total / 134).round() : 0;
     final days = (hours / 24).floor();
     _backupTimeCtrl.text = '$hours Jam/$days Hari';
@@ -523,46 +559,78 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   List<String> _validateBbmLimits() {
     final errors = <String>[];
-    double parseVal(String text) => double.tryParse(text.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0;
+    double parseH(String text) => NumberUtils.parseDecimal(text) ?? 0.0; // tinggi: titik/koma = desimal
+    double parseL(String text) => NumberUtils.parseLiter(text) ?? 0.0; // liter: titik = ribuan
 
-    final hB1 = parseVal(_bbmB1TinggiCtrl.text); final vB1 = parseVal(_bbmB1LiterCtrl.text);
+    final hB1 = parseH(_bbmB1TinggiCtrl.text); final vB1 = parseL(_bbmB1LiterCtrl.text);
     if (hB1 > _maxHeightB1) errors.add('Tangki Bulanan 1: Tinggi ($hB1 cm) melebihi batas maks ${_maxHeightB1.toInt()} cm');
     if (vB1 > _maxLiterB1) errors.add('Tangki Bulanan 1: Volume ($vB1 L) melebihi batas maks ${_maxLiterB1.toInt()} L');
 
-    final hB2 = parseVal(_bbmB2TinggiCtrl.text); final vB2 = parseVal(_bbmB2LiterCtrl.text);
+    final hB2 = parseH(_bbmB2TinggiCtrl.text); final vB2 = parseL(_bbmB2LiterCtrl.text);
     if (hB2 > _maxHeightB23) errors.add('Tangki Bulanan 2: Tinggi ($hB2 cm) melebihi batas maks ${_maxHeightB23.toInt()} cm');
     if (vB2 > _maxLiterB23) errors.add('Tangki Bulanan 2: Volume ($vB2 L) melebihi batas maks ${_maxLiterB23.toInt()} L');
 
-    final hB3 = parseVal(_bbmB3TinggiCtrl.text); final vB3 = parseVal(_bbmB3LiterCtrl.text);
+    final hB3 = parseH(_bbmB3TinggiCtrl.text); final vB3 = parseL(_bbmB3LiterCtrl.text);
     if (hB3 > _maxHeightB23) errors.add('Tangki Bulanan 3: Tinggi ($hB3 cm) melebihi batas maks ${_maxHeightB23.toInt()} cm');
     if (vB3 > _maxLiterB23) errors.add('Tangki Bulanan 3: Volume ($vB3 L) melebihi batas maks ${_maxLiterB23.toInt()} L');
 
-    final hH1 = parseVal(_bbmH1TinggiCtrl.text); final vH1 = parseVal(_bbmH1LiterCtrl.text);
+    final hH1 = parseH(_bbmH1TinggiCtrl.text); final vH1 = parseL(_bbmH1LiterCtrl.text);
     if (hH1 > _maxHeightH12) errors.add('Tangki Harian 1: Tinggi ($hH1 cm) melebihi batas maks ${_maxHeightH12.toInt()} cm');
     if (vH1 > _maxLiterH12) errors.add('Tangki Harian 1: Volume ($vH1 L) melebihi batas maks ${_maxLiterH12.toInt()} L');
 
-    final hH2 = parseVal(_bbmH2TinggiCtrl.text); final vH2 = parseVal(_bbmH2LiterCtrl.text);
+    final hH2 = parseH(_bbmH2TinggiCtrl.text); final vH2 = parseL(_bbmH2LiterCtrl.text);
     if (hH2 > _maxHeightH12) errors.add('Tangki Harian 2: Tinggi ($hH2 cm) melebihi batas maks ${_maxHeightH12.toInt()} cm');
     if (vH2 > _maxLiterH12) errors.add('Tangki Harian 2: Volume ($vH2 L) melebihi batas maks ${_maxLiterH12.toInt()} L');
 
     return errors;
   }
 
+  /// Data tersimpan memakai struktur bersarang (`rects` list, `ups202` map),
+  /// sedangkan pengecekan memakai key datar (`rect_0_kw`, `ups_2.02_kw`).
+  Map<String, dynamic> _flattenLastSubmitted() {
+    final flat = Map<String, dynamic>.from(_lastSubmittedData);
+
+    final rects = _lastSubmittedData['rects'];
+    if (rects is List) {
+      for (int i = 0; i < rects.length; i++) {
+        final r = rects[i];
+        if (r is Map) {
+          flat['rect_${i}_kw'] = r['kw'];
+          flat['rect_${i}_volt'] = r['volt'];
+          flat['rect_${i}_occ'] = r['occ'];
+        }
+      }
+    }
+
+    for (final code in const ['2.02', '2.03', '3.01', '3.02', '5.01', '5.02']) {
+      final u = _lastSubmittedData['ups${code.replaceAll('.', '')}'];
+      if (u is Map) {
+        flat['ups_${code}_kw'] = u['kw'];
+        flat['ups_${code}_occ'] = u['occ'];
+        flat['ups_${code}_volt'] = u['volt'];
+        flat['ups_${code}_pct'] = u['pct'];
+        flat['ups_${code}_runtime'] = u['runtime'];
+      }
+    }
+    return flat;
+  }
+
   ({List<String> zeroList, List<String> sameList}) _checkZeroAndSameWarnings() {
     final zeroList = <String>[];
     final sameList = <String>[];
+    final prev = _flattenLastSubmitted();
 
     bool isZero(String val) {
-      final clean = val.trim().replaceAll('.', '').replaceAll(',', '.');
-      final num = double.tryParse(clean);
-      return clean.isEmpty || clean == '0' || (num != null && num == 0);
+      if (val.trim().isEmpty) return true;
+      final n = NumberUtils.parseDecimal(val);
+      return n == null || n == 0;
     }
 
     void verify(String fieldKey, String label, String currentVal, {bool allowSame = false}) {
       if (isZero(currentVal)) {
         zeroList.add(label);
-      } else if (!allowSame && _lastSubmittedData.isNotEmpty) {
-        final prevVal = _lastSubmittedData[fieldKey]?.toString();
+      } else if (!allowSame && prev.isNotEmpty) {
+        final prevVal = prev[fieldKey]?.toString();
         if (prevVal != null && prevVal.isNotEmpty && prevVal.trim() == currentVal.trim()) {
           sameList.add(label);
         }
@@ -579,7 +647,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     verify('lvmdpKva', 'LVMDP: KVA', _lvmdpKvaCtrl.text);
     verify('lvmdpKw', 'LVMDP: KW', _lvmdpKwCtrl.text);
     verify('lvmdpCosPhi', 'LVMDP: Cos Phi', _lvmdpCosPhiCtrl.text);
-    verify('lvmdpRs', 'LVMDP: Tegangan R-S', _lvmdpRsCtrl.text);
+    verify('lvmdpRs', 'LVMDP: Tegangan R-N', _lvmdpRsCtrl.text);
     verify('lvmdpSn', 'LVMDP: Tegangan S-N', _lvmdpSnCtrl.text);
     verify('lvmdpTn', 'LVMDP: Tegangan T-N', _lvmdpTnCtrl.text);
     verify('lvmdpNg', 'LVMDP: Tegangan N-G', _lvmdpNgCtrl.text);
@@ -673,174 +741,321 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     return (zeroList: zeroList, sameList: sameList);
   }
 
-  // --- LOGIKA PENGIRIMAN HTTP KE APPS SCRIPT ---
-  Future<void> _submitDataToAppsScript(String reportId, String hariTanggal, String jam) async {
-    setState(() => _isSubmitting = true);
+  // --- PENGIRIMAN KE APPS SCRIPT ---
+  // Alur: laporan disimpan dulu di perangkat (pending) -> dikirim dengan timeout ->
+  // dihapus dari pending hanya jika server membalas sukses. Jika koneksi gagal,
+  // laporan tetap ada dan bisa dikirim ulang dengan ID yang sama.
+  static const Duration _requestTimeout = Duration(seconds: 25);
+  static const String _pendingKey = 'ttc_sudiang_pending_submission';
+  static const String _pinKey = 'PIN_SUDIANG'; // kunci PIN site ini (sama dengan di home_page)
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Sedang mengirim data ke Spreadsheet...'),
-        duration: Duration(days: 1),
-      ),
-    );
+  // true  -> angka dikirim sebagai number (desimal dinormalkan, tanpa pemisah ribuan),
+  //          jadi tidak bergantung locale spreadsheet.
+  // false -> dikirim apa adanya seperti diketik (perilaku lama).
+  static const bool _sendNumbersAsNumeric = true;
+  static const Set<String> _textOnlyKeys = {
+    'ID', 'Hari/Tanggal', 'Waktu', 'Nomor OLO', 'Status PLN',
+    'Status Genset 01', 'Status Genset 02', 'Status Genset 03', 'PUE', 'Pelaksana',
+  };
 
-    try {
-      final backupParts = _backupTimeCtrl.text.split('/');
-      final backupJam = backupParts.isNotEmpty ? backupParts[0].replaceAll(RegExp(r'[^0-9]'), '') : '0';
-      final backupHari = backupParts.length > 1 ? backupParts[1].replaceAll(RegExp(r'[^0-9]'), '') : '0';
-
-      final Map<String, dynamic> rowData = {
-        "ID": reportId,
-        "Hari/Tanggal": hariTanggal,
-        "Waktu": jam,
-        "Nomor OLO": "089646442994",
-        "Status PLN": _statusPln,
-        "KWH": _kwhCtrl.text,
-        "Capacity Trafo": "2000",
-        "Genset Failed (3)": _failedGensetCtrl.text,
-        "PAC Failed (52)": _failedPacCtrl.text,
-        "Rectifier Failed (13)": _failedRectiCtrl.text,
-        "UPS Failed (7)": _failedUpsCtrl.text,
-        "LVMDP_KVA": _lvmdpKvaCtrl.text,
-        "LVMDP_KW": _lvmdpKwCtrl.text,
-        "LVMDP_Cos_Phi": _lvmdpCosPhiCtrl.text,
-        "LVMDP_Tegangan_R-S": _lvmdpRsCtrl.text,
-        "LVMDP_Tegangan_S-N": _lvmdpSnCtrl.text,
-        "LVMDP_Tegangan_T-N": _lvmdpTnCtrl.text,
-        "LVMDP_Tegangan_N-G": _lvmdpNgCtrl.text,
-        "LVMDP_Load_R": _lvmdpArusRCtrl.text,
-        "LVMDP_Load_S": _lvmdpArusSCtrl.text,
-        "LVMDP_Load_T": _lvmdpArusTCtrl.text,
-        "Kap Genset 01": "750",
-        "Kap Genset 02": "1000",
-        "Kap Genset 03": "750",
-        "Status Genset 01": _genset1Mode,
-        "Status Genset 02": _genset2Mode,
-        "Status Genset 03": _genset3Mode,
-        "SMU Genset 01": _smuGenset1Ctrl.text,
-        "Batt Volt Genset 01": _voltGenset1Ctrl.text,
-        "Suhu Genset 01": _suhuGenset1Ctrl.text,
-        "SMU Genset 02": _smuGenset2Ctrl.text,
-        "Batt Volt Genset 02": _voltGenset2Ctrl.text,
-        "Suhu Genset 02": _suhuGenset2Ctrl.text,
-        "SMU Genset 03": _smuGenset3Ctrl.text,
-        "Batt Volt Genset 03": _voltGenset3Ctrl.text,
-        "Suhu Genset 03": _suhuGenset3Ctrl.text,
-        "Level Tangki Bulanan 1 (11.662L)": _bbmB1LiterCtrl.text,
-        "Level Tangki Bulanan 2 (10.000L)": _bbmB2LiterCtrl.text,
-        "Level Tangki Bulanan 3 (10.000L)": _bbmB3LiterCtrl.text,
-        "Level Tangki Harian 1 (1.500L)": _bbmH1LiterCtrl.text,
-        "Level Tangki Harian 2 (1.500L)": _bbmH2LiterCtrl.text,
-        "Total Solar": _totalSolarCtrl.text,
-        "Backup Time Jam": backupJam,
-        "Backup Time Hari": backupHari,
-      };
-
-      for (int i = 0; i < 13; i++) {
-        String numStr = (i + 1).toString().padLeft(2, '0');
-        rowData["Rect $numStr Load kW"] = _rects[i].kwCtrl.text;
-        rowData["Rect $numStr Voltage"] = _rects[i].voltCtrl.text;
-        rowData["Rect $numStr Load %"] = _rects[i].occCtrl.text;
+  /// Salinan baris untuk spreadsheet: kolom angka diubah menjadi number.
+  /// Teks laporan (template WhatsApp) tetap memakai nilai seperti diketik.
+  Map<String, dynamic> _toSheetRow(Map<String, dynamic> row) {
+    if (!_sendNumbersAsNumeric) return Map<String, dynamic>.from(row);
+    final out = <String, dynamic>{};
+    row.forEach((key, value) {
+      if (_textOnlyKeys.contains(key) || value is! String) {
+        out[key] = value;
+        return;
       }
-
-      void addUpsData(String code, UpsItem ups) {
-        rowData["UPS $code Load KW"] = ups.kwCtrl.text;
-        rowData["UPS $code Load %"] = ups.occCtrl.text;
-        rowData["UPS $code Battery V"] = ups.voltCtrl.text;
-        rowData["UPS $code Battery %"] = ups.pctCtrl.text;
-        rowData["UPS $code Runtime min"] = ups.runtimeCtrl.text;
+      final text = value.trim();
+      if (text.isEmpty) {
+        out[key] = '';
+        return;
       }
-      addUpsData("2.02", _ups202); addUpsData("2.03", _ups203);
-      addUpsData("3.01", _ups301); addUpsData("3.02", _ups302);
-      addUpsData("5.01", _ups501); addUpsData("5.02", _ups502);
-
-      void addRoomData(String name, String temp, String hum) {
-        rowData["$name Suhu"] = temp;
-        rowData["$name Humidity"] = hum;
+      final isLiter = key.startsWith('Level Tangki') || key == 'Total Solar';
+      final n = isLiter ? NumberUtils.parseLiter(text) : NumberUtils.parseDecimal(text);
+      if (n == null || n.isNaN || n.isInfinite) {
+        out[key] = value;
+        return;
       }
-      addRoomData("L1 R. Genset", _f1GensetTempCtrl.text, _f1GensetHumCtrl.text);
-      addRoomData("L1 R. Trafo", _f1TrafoTempCtrl.text, _f1TrafoHumCtrl.text);
-      addRoomData("L2 R. Battery", _f2BattTempCtrl.text, _f2BattHumCtrl.text);
-      addRoomData("L2 R. Rectifier", _f2RectiTempCtrl.text, _f2RectiHumCtrl.text);
-      addRoomData("L2 R. Msc", _f2MscTempCtrl.text, _f2MscHumCtrl.text);
-      addRoomData("L2 R. Csps", _f2CspsTempCtrl.text, _f2CspsHumCtrl.text);
-      addRoomData("L3 R. Battery", _f3BattTempCtrl.text, _f3BattHumCtrl.text);
-      addRoomData("L3 R. Rectifier", _f3RectiTempCtrl.text, _f3RectiHumCtrl.text);
-      addRoomData("L3 R. Invas", _f3InvasTempCtrl.text, _f3InvasHumCtrl.text);
-      addRoomData("L3 R. Core", _f3CoreTempCtrl.text, _f3CoreHumCtrl.text);
-      addRoomData("L3 R. Mkios", _f3MkiosTempCtrl.text, _f3MkiosHumCtrl.text);
-      addRoomData("L3 R. Ocs", _f3OcsTempCtrl.text, _f3OcsHumCtrl.text);
-      addRoomData("L4 R. Battery", _f4BattTempCtrl.text, _f4BattHumCtrl.text);
-      addRoomData("L4 R. Rectifier", _f4RectiTempCtrl.text, _f4RectiHumCtrl.text);
-      addRoomData("L4 R. BSC RNC", _f4BscRncTempCtrl.text, _f4BscRncHumCtrl.text);
-      addRoomData("L4 R. Interkoneksi", _f4InterTempCtrl.text, _f4InterHumCtrl.text);
-      addRoomData("L4 R. Transmisi", _f4TransTempCtrl.text, _f4TransHumCtrl.text);
-      addRoomData("L5 R. Utility A", _f5UtilATempCtrl.text, _f5UtilAHumCtrl.text);
-      addRoomData("L5 R. Utility B", _f5UtilBTempCtrl.text, _f5UtilBHumCtrl.text);
-      addRoomData("L5 R. Data center", _f5DcTempCtrl.text, _f5DcHumCtrl.text);
+      out[key] = n == n.roundToDouble() ? n.toInt() : n;
+    });
+    return out;
+  }
 
-      rowData["PUE"] = "";
-      rowData["Pelaksana"] = "$_pelaksana1 / $_pelaksana2";
-
-      final payload = {
-        "site_target": "TTC Sudiang",
-        "data": rowData
-      };
-
-      // Buat request secara manual agar tidak terjebak Redirect 302
-      var request = http.Request('POST', Uri.parse(scriptUrl));
-      request.headers.addAll({"Content-Type": "application/json"});
-      request.body = jsonEncode(payload);
-      request.followRedirects = false; // Matikan auto-follow
-
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
-
-      // Jika Google Apps Script mengembalikan 302/303, buru URL lokasi barunya (tempat JSON berada)
-      if (response.statusCode == 302 || response.statusCode == 303) {
-        final location = response.headers['location'];
-        if (location != null) {
-          response = await http.get(Uri.parse(location)); // Ambil JSON asli
-        }
-      }
-
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-      // Membaca JSON asli
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        if (result['status'] == 'success') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: Colors.green, content: Text(result['message'] ?? 'Berhasil dikirim!')),
-          );
-        } else {
-          // Tangkap pesan penolakan 2 jam (cooldown) dari Spreadsheet di sini
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: Colors.red,
-              content: Text(result['message'] ?? 'Ditolak Sistem'),
-              duration: const Duration(seconds: 5), // Tampilkan lebih lama
-            ),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: Colors.red, content: Text('Gagal terhubung ke server (HTTP ${response.statusCode})')),
-        );
-      }
-
-    } catch (e) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.red, content: Text('Koneksi gagal: $e')),
-      );
-    } finally {
-      setState(() => _isSubmitting = false);
+  Future<void> _persistPending() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pending = _pendingSubmission;
+    if (pending == null) {
+      await prefs.remove(_pendingKey);
+    } else {
+      await prefs.setString(_pendingKey, jsonEncode(pending));
     }
   }
 
-  void _onGenerateButtonPressed() {
+  Future<bool> _hasConnection() async {
+    try {
+      // connectivity_plus v6+ mengembalikan List, versi lama satu nilai.
+      final dynamic result = await Connectivity().checkConnectivity();
+      if (result is List) {
+        return result.isNotEmpty && !result.every((e) => e == ConnectivityResult.none);
+      }
+      return result != ConnectivityResult.none;
+    } catch (_) {
+      return true; // jika pengecekan gagal, biarkan request yang menentukan
+    }
+  }
+
+  Future<void> _sendPending({bool allowReauth = true}) async {
+    final pending = _pendingSubmission;
+    if (pending == null || _isSubmitting) return;
+
+    // AppNotifier tidak butuh context: aman dipakai walau halaman sudah ditutup.
+    AppNotifier.loading('Sedang mengirim data ke Spreadsheet...');
+    setState(() {
+      _isSubmitting = true;
+      _submitNote = '';
+    });
+
+    var outcome = _SubmitOutcome.failed;
+    var message = '';
+    var needsAuth = false;
+
+    try {
+      if (!await _hasConnection()) {
+        message = 'Tidak ada koneksi internet. Laporan tersimpan, tekan "Kirim Ulang" saat sudah online.';
+      } else if (scriptUrl.isEmpty) {
+        message = 'SCRIPT_URL belum diatur di file .env.';
+      } else {
+        pending['attempts'] = ((pending['attempts'] as int?) ?? 0) + 1;
+        final authPrefs = await SharedPreferences.getInstance();
+        final response = await AppsScriptClient.postJson(
+          scriptUrl,
+          {
+            'site_target': 'TTC Sudiang',
+            'token': PinAuth.getToken(authPrefs, _pinKey) ?? '',
+            'data': pending['sheetRow'],
+          },
+          timeout: _requestTimeout,
+        );
+
+        if (response.statusCode == 200) {
+          Map<String, dynamic>? result;
+          try {
+            result = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+          } catch (_) {
+            result = null;
+          }
+          if (result == null) {
+            message = 'Respons server tidak valid (cek deployment Apps Script).';
+          } else if (result['status'] == 'success') {
+            outcome = _SubmitOutcome.success;
+            message = (result['message'] as String?) ?? 'Berhasil dikirim!';
+            final warnings = result['warnings'];
+            if (warnings is List && warnings.isNotEmpty) {
+              message += '\n${warnings.join('\n')}';
+            }
+            final unmatched = result['unmatched'];
+            if (unmatched is List && unmatched.isNotEmpty) {
+              message += '\nKolom tidak cocok di sheet: ${unmatched.join(', ')}';
+            }
+          } else if (result['retryable'] == true) {
+            // Server sibuk / perangkat belum terverifikasi: bukan penolakan, laporan tetap
+            // disimpan untuk Kirim Ulang.
+            message = (result['message'] as String?) ?? 'Server sibuk. Coba kirim ulang sebentar lagi.';
+            if (result['code'] == 'auth_required') needsAuth = true;
+          } else {
+            outcome = _SubmitOutcome.rejected;
+            message = (result['message'] as String?) ?? 'Ditolak Sistem';
+            if (((pending['attempts'] as int?) ?? 1) > 1) {
+              message += '\nJika pengiriman sebelumnya sempat terputus, data mungkin sudah masuk. Cek spreadsheet.';
+            }
+          }
+        } else {
+          message = 'Gagal terhubung ke server (HTTP ${response.statusCode}). Laporan tersimpan, coba kirim ulang.';
+        }
+      }
+    } on TimeoutException {
+      message = 'Koneksi lambat (timeout). Laporan tersimpan, tekan "Kirim Ulang".';
+    } catch (e) {
+      message = 'Koneksi gagal: $e';
+    }
+
+    // Persistensi tidak butuh context, jadi tetap dijalankan walau halaman sudah ditutup.
+    final prefs = await SharedPreferences.getInstance();
+    if (outcome == _SubmitOutcome.success) {
+      final snapshot = pending['snapshot'];
+      if (snapshot is Map) {
+        final map = Map<String, dynamic>.from(snapshot);
+        await prefs.setString('ttc_sudiang_last_submitted_report', jsonEncode(map));
+        _lastSubmittedData = map;
+      }
+      _pendingSubmission = null;
+      await prefs.remove(_pendingKey);
+    } else if (outcome == _SubmitOutcome.rejected) {
+      // Ditolak server (mis. cooldown): mengirim ulang data yang sama tidak akan membantu.
+      _pendingSubmission = null;
+      await prefs.remove(_pendingKey);
+    } else {
+      await prefs.setString(_pendingKey, jsonEncode(pending));
+    }
+
+    AppNotifier.show(message, type: outcome == _SubmitOutcome.success ? NoticeType.success : NoticeType.error);
+
+    if (mounted) {
+      setState(() {
+        _isSubmitting = false;
+        _reportSubmitted = outcome == _SubmitOutcome.success;
+        _submitNote = outcome == _SubmitOutcome.success ? '' : message;
+      });
+    }
+
+    // Server meminta verifikasi perangkat: minta PIN (online), lalu kirim ulang satu kali.
+    if (needsAuth && allowReauth && mounted) {
+      final verified = await _reauthenticate();
+      if (verified && mounted) await _sendPending(allowReauth: false);
+    }
+  }
+
+  Future<bool> _reauthenticate() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => PinDialog(
+        title: 'Verifikasi Perangkat',
+        description: 'Perangkat ini perlu diverifikasi ke server sebelum bisa mengirim laporan. '
+            'Masukkan PIN site (butuh internet).',
+        verify: (pin) async {
+          final result = await PinAuth.verifyOnServer(prefs, _pinKey, pin);
+          if (result == null) return 'Tidak dapat terhubung ke server. Pastikan internet aktif.';
+          if (result.status == PinServerStatus.ok) {
+            await PinAuth.saveLocal(prefs, _pinKey, pin);
+            return null;
+          }
+          if (result.status == PinServerStatus.locked) {
+            return result.message ?? 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.';
+          }
+          return 'PIN salah!';
+        },
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<String?> _askPendingChoice() {
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ada Laporan Belum Terkirim', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Laporan ${_pendingSubmission?['reportId'] ?? ''} belum berhasil dikirim ke Spreadsheet.\n\n'
+              'Kirim ulang laporan tersebut, atau buang dan buat laporan baru dari isian form saat ini?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('discard'),
+            child: const Text('Buang & Buat Baru', style: TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop('retry'),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
+            child: const Text('Kirim Ulang', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDiscardPending() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Buang Laporan?', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Laporan yang belum terkirim akan dihapus dari perangkat dan tidak bisa dikembalikan.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
+            child: const Text('Buang', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _pendingSubmission = null;
+      _generatedReportText = '';
+      _submitNote = '';
+    });
+    await _persistPending();
+  }
+
+  // --- VALIDASI PELAKSANA ---
+  String? _validatePelaksana() {
+    if (_listPelaksana.isEmpty) {
+      return 'Daftar teknisi belum termuat. Buka halaman utama, tekan Sync Config, lalu masuk lagi.';
+    }
+    if (_pelaksana1 == null || _pelaksana2 == null ||
+        !_listPelaksana.contains(_pelaksana1) || !_listPelaksana.contains(_pelaksana2)) {
+      return 'Pilih Pelaksana 1 dan Pelaksana 2 terlebih dahulu.';
+    }
+    return null;
+  }
+
+  Future<bool> _confirmSamePelaksana() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pelaksana Sama', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Pelaksana 1 dan 2 sama-sama "$_pelaksana1". Lanjutkan?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Periksa Kembali')),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
+            child: const Text('Lanjutkan', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
+  Future<void> _onGenerateButtonPressed() async {
     if (_isSubmitting) return; // Mencegah klik ganda
+
+    // 0. Masih ada laporan lama yang belum terkirim?
+    if (_pendingSubmission != null) {
+      final choice = await _askPendingChoice();
+      if (!mounted) return;
+      if (choice == 'retry') {
+        await _sendPending();
+        return;
+      }
+      if (choice != 'discard') return;
+      setState(() => _pendingSubmission = null);
+      await _persistPending();
+      if (!mounted) return;
+    }
+
+    // 1. Pelaksana wajib dipilih
+    final pelaksanaError = _validatePelaksana();
+    if (pelaksanaError != null) {
+      setState(() {
+        _pelaksanaError = pelaksanaError;
+        _currentTab = 5;
+      });
+      AppNotifier.error(pelaksanaError);
+      return;
+    }
+    if (_pelaksana1 == _pelaksana2 && _listPelaksana.length > 1) {
+      final proceed = await _confirmSamePelaksana();
+      if (!mounted || !proceed) return;
+    }
 
     final bbmLimitErrors = _validateBbmLimits();
     if (bbmLimitErrors.isNotEmpty) {
@@ -1023,16 +1238,8 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     );
   }
 
-  Future<void> _executeGenerateReportAndSubmit(String reportId) async {
-    final now = DateTime.now();
-    const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-
-    final hari = days[now.weekday - 1];
-    final tanggal = '${now.day} ${months[now.month - 1]} ${now.year}';
-    final jam = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} WITA';
-    final formatHariTanggal = "$hari $tanggal";
-
+  /// Baris data lengkap (nilai seperti diketik), dipakai untuk template laporan dan spreadsheet.
+  Map<String, dynamic> _buildRowData(String reportId, String formatHariTanggal, String jam) {
     // Kumpulkan Row Data persis seperti yang dikirim ke Spreadsheet
     final backupParts = _backupTimeCtrl.text.split('/');
     final backupJam = backupParts.isNotEmpty ? backupParts[0].replaceAll(RegExp(r'[^0-9]'), '') : '0';
@@ -1130,9 +1337,24 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     rowData["PUE"] = "";
     rowData["Pelaksana"] = "$_pelaksana1 / $_pelaksana2";
+    return rowData;
+  }
+
+  Future<void> _executeGenerateReportAndSubmit(String reportId) async {
+    final now = DateTime.now();
+    const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+    final hari = days[now.weekday - 1];
+    final tanggal = '${now.day} ${months[now.month - 1]} ${now.year}';
+    final jam = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} WITA';
+    final formatHariTanggal = "$hari $tanggal";
+
+    final rowData = _buildRowData(reportId, formatHariTanggal, jam);
 
     // 2. MENGOLAH TEMPLATE DINAMIS
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final configStr = prefs.getString('app_config');
 
     // Teks Fallback Darurat jika Template Gagal Dimuat
@@ -1148,36 +1370,40 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       templateText = templateText.replaceAll('{{$key}}', value.toString());
     });
 
+    final reportText = templateText.trim();
+
+    // Simpan dulu di perangkat; baru dihapus setelah server membalas sukses.
+    _pendingSubmission = {
+      'reportId': reportId,
+      'sheetRow': _toSheetRow(rowData),
+      'reportText': reportText,
+      'snapshot': _buildCurrentDataMap(),
+      'attempts': 0,
+    };
     setState(() {
-      _generatedReportText = templateText.trim();
+      _generatedReportText = reportText;
+      _reportSubmitted = false;
+      _submitNote = '';
     });
+    await _persistPending();
+    if (!mounted) return;
 
-    final currentMap = _buildCurrentDataMap();
-    await prefs.setString('ttc_sudiang_last_submitted_report', jsonEncode(currentMap));
-    _lastSubmittedData = currentMap;
-
-    await _submitDataToAppsScript(reportId, formatHariTanggal, jam);
+    await _sendPending();
   }
 
   Future<void> _copyToClipboard() async {
     if (_generatedReportText.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: _generatedReportText));
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Laporan berhasil disalin!')));
+    AppNotifier.success('Laporan berhasil disalin!');
   }
 
-  Future<void> _sendToWhatsApp() async {
+  Future<void> _shareReport() async {
     if (_generatedReportText.isEmpty) return;
-    final encoded = Uri.encodeComponent(_generatedReportText);
-    final waUri = Uri.parse('whatsapp://send?text=$encoded');
-    final webUri = Uri.parse('https://api.whatsapp.com/send?text=$encoded');
     try {
-      if (await canLaunchUrl(waUri)) {
-        await launchUrl(waUri);
-      } else {
-        await launchUrl(webUri, mode: LaunchMode.externalApplication);
-      }
+      // Membuka share sheet Android; pilih WhatsApp (atau aplikasi lain) dari sana.
+      await SharePlus.instance.share(ShareParams(text: _generatedReportText));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak dapat membuka WhatsApp.')));
+      AppNotifier.error('Tidak dapat membuka menu bagikan.');
     }
   }
 
@@ -1373,20 +1599,80 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     );
   }
 
+  Widget _buildPelaksanaDropdown(String label, String? value, void Function(String?) assign) {
+    return DropdownButtonFormField<String>(
+      value: _listPelaksana.contains(value) ? value : null,
+      isExpanded: true,
+      hint: Text(_listPelaksana.isEmpty ? 'Belum ada data' : 'Pilih', style: const TextStyle(fontSize: 13)),
+      decoration: InputDecoration(labelText: label, isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+      items: _listPelaksana.map((name) => DropdownMenuItem(value: name, child: Text(name, overflow: TextOverflow.ellipsis))).toList(),
+      onChanged: _listPelaksana.isEmpty
+          ? null
+          : (val) {
+        if (val == null) return;
+        setState(() {
+          assign(val);
+          _pelaksanaError = null;
+        });
+        _saveFormData();
+      },
+    );
+  }
+
   Widget _buildTabReport() {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
+        if (_pendingSubmission != null)
+          _buildCard(
+            title: 'Laporan Belum Terkirim',
+            children: [
+              Text('ID: ${_pendingSubmission!['reportId']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text(
+                _submitNote.isNotEmpty ? _submitNote : 'Data tersimpan di perangkat dan akan dikirim ulang dengan ID yang sama.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isSubmitting ? null : _confirmDiscardPending,
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                      child: const Text('Buang'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: _isSubmitting ? null : _sendPending,
+                      icon: const Icon(Icons.refresh, size: 18, color: Colors.white),
+                      label: const Text('Kirim Ulang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(backgroundColor: primaryRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         _buildCard(
           title: 'Petugas Pelaksana',
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: DropdownButtonFormField<String>(value: _pelaksana1, decoration: InputDecoration(labelText: 'Pelaksana 1', isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), items: _listPelaksana.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(), onChanged: (val) { if (val != null) { setState(() => _pelaksana1 = val); _saveFormData(); } })),
+                Expanded(child: _buildPelaksanaDropdown('Pelaksana 1', _pelaksana1, (val) => _pelaksana1 = val)),
                 const SizedBox(width: 10),
-                Expanded(child: DropdownButtonFormField<String>(value: _pelaksana2, decoration: InputDecoration(labelText: 'Pelaksana 2', isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), items: _listPelaksana.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(), onChanged: (val) { if (val != null) { setState(() => _pelaksana2 = val); _saveFormData(); } })),
+                Expanded(child: _buildPelaksanaDropdown('Pelaksana 2', _pelaksana2, (val) => _pelaksana2 = val)),
               ],
             ),
+            if (_pelaksanaError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(_pelaksanaError!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              ),
           ],
         ),
         _buildCard(
@@ -1426,13 +1712,47 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
           _buildCard(
             title: 'Preview Laporan',
             children: [
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _reportSubmitted ? Colors.green.shade50 : Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _reportSubmitted ? Colors.green.shade300 : Colors.amber.shade400),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _reportSubmitted ? Icons.check_circle : Icons.warning_amber_rounded,
+                      size: 18,
+                      color: _reportSubmitted ? Colors.green.shade700 : Colors.amber.shade900,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _reportSubmitted
+                            ? 'Terkirim ke Spreadsheet'
+                            : (_isSubmitting
+                            ? 'Sedang mengirim ke Spreadsheet...'
+                            : (_submitNote.isNotEmpty ? 'Belum terkirim: $_submitNote' : 'Belum terkirim ke Spreadsheet. Teks di bawah hanya preview.')),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _reportSubmitted ? Colors.green.shade900 : Colors.amber.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)), child: SelectableText(_generatedReportText, style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.4))),
               const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(child: OutlinedButton.icon(onPressed: _copyToClipboard, icon: const Icon(Icons.copy, size: 16), label: const Text('Salin'), style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))))),
                   const SizedBox(width: 10),
-                  Expanded(child: ElevatedButton.icon(onPressed: _sendToWhatsApp, icon: const Icon(Icons.send, size: 16, color: Colors.white), label: const Text('WhatsApp', style: TextStyle(color: Colors.white)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))))),
+                  Expanded(child: ElevatedButton.icon(onPressed: _shareReport, icon: const Icon(Icons.share, size: 16, color: Colors.white), label: const Text('Bagikan', style: TextStyle(color: Colors.white)), style: ElevatedButton.styleFrom(backgroundColor: primaryRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))))),
                 ],
               ),
             ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 import 'package:forui/forui.dart';
+import 'components/app_notifier.dart';
 import 'pages/home_page.dart';
 
 Future<void> main() async {
@@ -36,7 +37,8 @@ class ChecklistGedungApp extends StatelessWidget {
       ),
       builder: (context, child) => FTheme(
         data: FTheme.neutral.light.touch,
-        child: child!,
+        // Notifikasi global tampil di atas layar, di atas semua halaman dan dialog.
+        child: AppNotificationHost(child: child!),
       ),
       home: const HomePage(),
     );

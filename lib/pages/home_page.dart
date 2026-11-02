@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart'; // Library untuk Hash SHA-256
 
+import '../components/app_notifier.dart';
+import '../components/apps_script_client.dart';
+import '../components/pin_auth.dart';
 import 'ttc_sudiang_page.dart';
 import 'ttc_pengayoman_page.dart';
 import 'ttc_paniki_page.dart';
@@ -28,26 +31,50 @@ class _HomePageState extends State<HomePage> {
     _fetchConfigFromServer(); // Otomatis sync data config saat aplikasi dibuka
   }
 
-  // Mengambil PIN, Teknisi, dan Template dari Spreadsheet
-  Future<void> _fetchConfigFromServer() async {
+  static const int _maxPinAttempts = 5;
+  static const Duration _pinLockDuration = Duration(seconds: 60);
+  final Map<String, int> _pinFailures = {};
+  final Map<String, DateTime> _pinLockedUntil = {};
+
+  // Mengambil Teknisi, Template (dan PIN mode lama) dari Spreadsheet
+  Future<void> _fetchConfigFromServer({bool showFeedback = false}) async {
     final scriptUrl = dotenv.env['SCRIPT_URL'];
-    if (scriptUrl == null || scriptUrl.isEmpty) return;
+    if (scriptUrl == null || scriptUrl.isEmpty) {
+      if (showFeedback) AppNotifier.error('SCRIPT_URL belum diatur di file .env.');
+      return;
+    }
 
     setState(() => _isSyncing = true);
+    String feedback = '';
+    bool ok = false;
     try {
-      final response = await http.get(Uri.parse("$scriptUrl?action=getConfig"));
-      if (response.statusCode == 200 || response.statusCode == 302) {
+      final response = await AppsScriptClient.get("$scriptUrl?action=getConfig");
+      if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
         if (result['status'] == 'success') {
-          // Simpan ke SharedPreferences
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('app_config', jsonEncode(result['data']));
+          ok = true;
+          feedback = 'Config berhasil disinkronkan.';
+        } else {
+          feedback = (result['message'] as String?) ?? 'Server menolak permintaan config.';
         }
+      } else {
+        feedback = 'Gagal sync (HTTP ${response.statusCode}). Memakai config tersimpan.';
       }
     } catch (_) {
-      // Abaikan jika error (misal offline), aplikasi tetap akan memakai cache lama
+      // Offline/timeout: aplikasi tetap memakai cache lama.
+      feedback = 'Tidak bisa terhubung ke server. Memakai config tersimpan.';
     } finally {
       if (mounted) setState(() => _isSyncing = false);
+    }
+
+    if (showFeedback) {
+      if (ok) {
+        AppNotifier.success(feedback);
+      } else {
+        AppNotifier.error(feedback);
+      }
     }
   }
 
@@ -55,93 +82,111 @@ class _HomePageState extends State<HomePage> {
     Navigator.of(context).push(MaterialPageRoute(builder: (context) => page));
   }
 
-  Future<void> _showPinDialog(BuildContext context, String envKey, Widget page) async {
+  // --- PIN ---
+  // Mode server: jika config berisi SERVER_PIN_CHECK=true, PIN diverifikasi di server dan hash PIN
+  // tidak lagi dikirim ke aplikasi. Setelah berhasil online, perangkat menyimpan token perangkat
+  // (untuk kirim laporan) dan hash ber-salt lokal (agar PIN tetap bisa dipakai OFFLINE).
+  // Internet hanya dibutuhkan sekali per perangkat per site.
+  // Mode lama: tanpa flag tersebut, PIN dicocokkan dengan hash dari config (perilaku sebelumnya).
+
+  /// Masa transisi (mode lama): ambil token perangkat diam-diam tanpa menunda login.
+  Future<void> _tryObtainToken(SharedPreferences prefs, String envKey, String pin) async {
+    final result = await PinAuth.verifyOnServer(prefs, envKey, pin);
+    if (result != null && result.status == PinServerStatus.ok) {
+      await PinAuth.saveLocal(prefs, envKey, pin);
+    }
+  }
+
+  /// Mengembalikan null jika PIN benar, atau pesan error untuk ditampilkan di dialog.
+  Future<String?> _verifyPin({
+    required SharedPreferences prefs,
+    required String envKey,
+    required String pin,
+    required bool serverCheck,
+    required String legacyHash,
+  }) async {
+    final lockedUntil = _pinLockedUntil[envKey];
+    if (lockedUntil != null && DateTime.now().isBefore(lockedUntil)) {
+      final sisa = lockedUntil.difference(DateTime.now()).inSeconds + 1;
+      return 'Terlalu banyak percobaan. Coba lagi dalam $sisa detik.';
+    }
+
+    bool accepted;
+    if (serverCheck) {
+      final server = await PinAuth.verifyOnServer(prefs, envKey, pin);
+      if (server != null && server.status == PinServerStatus.ok) {
+        await PinAuth.saveLocal(prefs, envKey, pin);
+        _pinFailures.remove(envKey);
+        return null;
+      }
+      if (server != null && server.status == PinServerStatus.locked) {
+        return server.message ?? 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.';
+      }
+      if (server != null) {
+        accepted = false; // PIN salah menurut server
+      } else {
+        // Server tidak terjangkau: pakai hash lokal bila perangkat ini pernah verifikasi online.
+        if (!PinAuth.hasLocal(prefs, envKey)) {
+          return 'Tidak dapat memverifikasi PIN. Hubungkan internet untuk verifikasi pertama kali di perangkat ini.';
+        }
+        accepted = PinAuth.matchLocal(prefs, envKey, pin);
+      }
+    } else {
+      accepted = sha256.convert(utf8.encode(pin)).toString() == legacyHash;
+      if (accepted) unawaited(_tryObtainToken(prefs, envKey, pin));
+    }
+
+    if (accepted) {
+      _pinFailures.remove(envKey);
+      return null;
+    }
+
+    final failures = (_pinFailures[envKey] ?? 0) + 1;
+    if (failures >= _maxPinAttempts) {
+      _pinFailures.remove(envKey);
+      _pinLockedUntil[envKey] = DateTime.now().add(_pinLockDuration);
+      return 'PIN salah! Terlalu banyak percobaan, tunggu ${_pinLockDuration.inSeconds} detik.';
+    }
+    _pinFailures[envKey] = failures;
+    return 'PIN salah! Sisa percobaan: ${_maxPinAttempts - failures}.';
+  }
+
+  Future<void> _showPinDialog(String envKey, Widget page) async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final configStr = prefs.getString('app_config');
 
     if (configStr == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Sistem belum terkonfigurasi. Pastikan ada internet saat pertama kali buka aplikasi.'),
-        ),
-      );
+      AppNotifier.error('Sistem belum terkonfigurasi. Pastikan ada internet saat pertama kali buka aplikasi.');
       return;
     }
 
-    final config = jsonDecode(configStr);
-    final expectedHash = config[envKey]; // Mengambil Hash PIN dari memori lokal
-
-    if (expectedHash == null || expectedHash.toString().trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: Colors.red, content: Text('Akses ditolak: PIN site belum dikonfigurasi di Server.')),
-      );
+    Map<String, dynamic> config;
+    try {
+      config = Map<String, dynamic>.from(jsonDecode(configStr) as Map);
+    } catch (_) {
+      AppNotifier.error('Config tersimpan rusak. Tekan Sync Config saat online.');
       return;
     }
 
-    final pinController = TextEditingController();
-    String errorMessage = '';
+    final serverCheck = config['SERVER_PIN_CHECK']?.toString().toLowerCase() == 'true';
+    final legacyHash = (config[envKey] ?? '').toString().trim();
 
-    await showDialog(
+    if (!serverCheck && legacyHash.isEmpty) {
+      AppNotifier.error('Akses ditolak: PIN site belum dikonfigurasi di Server.');
+      return;
+    }
+
+    final verified = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Masukkan PIN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Otorisasi diperlukan untuk masuk ke form site ini.', style: TextStyle(fontSize: 12.5)),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: pinController,
-                    keyboardType: TextInputType.number,
-                    obscureText: true,
-                    maxLength: 4,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'PIN 4 digit',
-                      errorText: errorMessage.isNotEmpty ? errorMessage : null,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      isDense: true,
-                    ),
-                    onChanged: (val) {
-                      if (errorMessage.isNotEmpty) setState(() => errorMessage = '');
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Batal'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    // Hash inputan teknisi menggunakan SHA-256
-                    var bytes = utf8.encode(pinController.text);
-                    var inputHash = sha256.convert(bytes).toString();
-
-                    // Cocokkan hash
-                    if (inputHash == expectedHash) {
-                      Navigator.of(ctx).pop();
-                      _navigateTo(context, page);
-                    } else {
-                      setState(() => errorMessage = 'PIN salah!');
-                      pinController.clear();
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
-                  child: const Text('Masuk', style: TextStyle(color: Colors.white)),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (_) => PinDialog(
+        verify: (pin) => _verifyPin(prefs: prefs, envKey: envKey, pin: pin, serverCheck: serverCheck, legacyHash: legacyHash),
+      ),
     );
+
+    if (verified == true && mounted) {
+      _navigateTo(context, page);
+    }
   }
 
   Widget _buildSiteButton({required BuildContext context, required String title, required String subtitle, required VoidCallback onTap}) {
@@ -199,7 +244,7 @@ class _HomePageState extends State<HomePage> {
           if (_isSyncing)
             const Padding(padding: EdgeInsets.only(right: 16.0), child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))),
           if (!_isSyncing)
-            IconButton(icon: const Icon(Icons.sync), onPressed: _fetchConfigFromServer, tooltip: 'Sync Config'),
+            IconButton(icon: const Icon(Icons.sync), onPressed: () => _fetchConfigFromServer(showFeedback: true), tooltip: 'Sync Config'),
         ],
       ),
       body: ListView(
@@ -232,10 +277,10 @@ class _HomePageState extends State<HomePage> {
           const Text('PILIH LOKASI SITE TTC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: Color(0xFF6B7280))),
           const SizedBox(height: 12),
 
-          _buildSiteButton(context: context, title: 'TTC Sudiang', subtitle: 'Makassar, Sulawesi Selatan', onTap: () => _showPinDialog(context, 'PIN_SUDIANG', const TtcSudiangPage())),
-          _buildSiteButton(context: context, title: 'TTC Pengayoman', subtitle: 'Makassar, Sulawesi Selatan', onTap: () => _showPinDialog(context, 'PIN_PENGAYOMAN', const TtcPengayomanPage())),
-          _buildSiteButton(context: context, title: 'TTC Paniki', subtitle: 'Manado, Sulawesi Utara', onTap: () => _showPinDialog(context, 'PIN_PANIKI', const TtcPanikiPage())),
-          _buildSiteButton(context: context, title: 'TTC Telling', subtitle: 'Telling, Sulawesi Tengah', onTap: () => _showPinDialog(context, 'PIN_PALU', const TtcTellingPage())),
+          _buildSiteButton(context: context, title: 'TTC Sudiang', subtitle: 'Makassar, Sulawesi Selatan', onTap: () => _showPinDialog('PIN_SUDIANG', const TtcSudiangPage())),
+          _buildSiteButton(context: context, title: 'TTC Pengayoman', subtitle: 'Makassar, Sulawesi Selatan', onTap: () => _showPinDialog('PIN_PENGAYOMAN', const TtcPengayomanPage())),
+          _buildSiteButton(context: context, title: 'TTC Paniki', subtitle: 'Manado, Sulawesi Utara', onTap: () => _showPinDialog('PIN_PANIKI', const TtcPanikiPage())),
+          _buildSiteButton(context: context, title: 'TTC Telling', subtitle: 'Telling, Sulawesi Tengah', onTap: () => _showPinDialog('PIN_PALU', const TtcTellingPage())),
         ],
       ),
     );
