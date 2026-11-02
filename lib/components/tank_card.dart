@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'number_utils.dart';
 import 'unit_input_field.dart';
 
 class TankCard extends StatelessWidget {
@@ -40,82 +41,87 @@ class TankCard extends StatelessWidget {
     return ((term1 - term2) * lengthCm) / 1000.0;
   }
 
+  /// Dipanggil saat tinggi sounding diubah. Volume (liter) dihitung otomatis,
+  /// tetapi kolom liter tetap bisa diedit manual setelahnya.
   void _calculateFromHeight(String val) {
-    // Sanitasi koma desimal agar bisa diparsing aman
-    final cleanVal = val.replaceAll('.', '').replaceAll(',', '.');
-    final h = double.tryParse(cleanVal);
-
-    if (h != null && h >= 0) {
-      final liter = calculateHorizontalTankVolume(
-        lengthCm: panjang,
-        diameterCm: diameter,
-        heightCm: h,
-      ).round();
-
-      // Kembalikan format ribuan ke text controller
-      literCtrl.text = liter.toString().replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-            (Match m) => '${m[1]}.',
-      );
+    if (val.trim().isEmpty) {
+      // Tinggi dikosongkan -> liter turunan ikut dikosongkan.
+      literCtrl.text = '';
+    } else {
+      final h = NumberUtils.parseDecimal(val);
+      if (h != null && h >= 0) {
+        final liter = calculateHorizontalTankVolume(
+          lengthCm: panjang,
+          diameterCm: diameter,
+          heightCm: h,
+        ).round();
+        literCtrl.text = NumberUtils.formatThousands(liter);
+      }
     }
     onValueChanged();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Terapkan sanitasi serupa untuk validasi UI
-    final currentHeight = double.tryParse(tinggiCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0;
-    final currentLiter = double.tryParse(literCtrl.text.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0;
+    // ListenableBuilder membuat status error (merah) ikut berubah saat mengetik,
+    // tanpa menunggu parent melakukan setState.
+    return ListenableBuilder(
+      listenable: Listenable.merge([tinggiCtrl, literCtrl]),
+      builder: (context, _) {
+        final currentHeight = NumberUtils.parseDecimal(tinggiCtrl.text) ?? 0.0;
+        final currentLiter = NumberUtils.parseLiter(literCtrl.text) ?? 0.0;
 
-    final isHeightExceeded = currentHeight > maxHeight;
-    final isLiterExceeded = currentLiter > maxLiter;
-    final isAnyExceeded = isHeightExceeded || isLiterExceeded;
+        final isHeightExceeded = currentHeight > maxHeight;
+        final isLiterExceeded = currentLiter > maxLiter;
+        final isAnyExceeded = isHeightExceeded || isLiterExceeded;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(tankName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
-              Text(
-                'Maks: ${maxHeight.toInt()}cm / ${maxLiter.toInt()}L',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isAnyExceeded ? FontWeight.bold : FontWeight.normal,
-                  color: isAnyExceeded ? Colors.red : Colors.grey.shade600,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(tankName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
+                  Text(
+                    'Maks: ${maxHeight.toInt()}cm / ${maxLiter.toInt()}L',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isAnyExceeded ? FontWeight.bold : FontWeight.normal,
+                      color: isAnyExceeded ? Colors.red : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: UnitInputField(
+                      label: 'Tinggi Sounding',
+                      controller: tinggiCtrl,
+                      unit: 'cm',
+                      isError: isHeightExceeded,
+                      onChanged: _calculateFromHeight,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: UnitInputField(
+                      label: 'Isi Volume',
+                      controller: literCtrl,
+                      unit: 'L',
+                      isError: isLiterExceeded,
+                      onChanged: (val) => onValueChanged(),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: UnitInputField(
-                  label: 'Tinggi Sounding',
-                  controller: tinggiCtrl,
-                  unit: 'cm',
-                  isError: isHeightExceeded,
-                  onChanged: _calculateFromHeight,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: UnitInputField(
-                  label: 'Isi Volume',
-                  controller: literCtrl,
-                  unit: 'L',
-                  isError: isLiterExceeded,
-                  onChanged: (val) => onValueChanged(),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

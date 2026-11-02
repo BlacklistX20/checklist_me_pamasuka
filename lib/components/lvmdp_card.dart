@@ -110,7 +110,7 @@ class LvmdpCard extends StatelessWidget {
           const SizedBox(height: 4),
           Row(
             children: [
-              Expanded(child: UnitInputField(label: 'R-S', controller: rsCtrl, unit: 'V')),
+              Expanded(child: UnitInputField(label: 'R-N', controller: rsCtrl, unit: 'V')),
               const SizedBox(width: 8),
               Expanded(child: UnitInputField(label: 'S-N', controller: snCtrl, unit: 'V')),
             ],
