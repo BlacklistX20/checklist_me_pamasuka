@@ -202,32 +202,67 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   final _f5DcTempCtrl = TextEditingController();
   final _f5DcHumCtrl = TextEditingController();
 
+  static const String _photosKey = 'ttc_sudiang_photos';
+  static const String _pendingPhotoKey = 'ttc_sudiang_pending_photo';
+
+  /// Daftar slot foto (kunci = judul tombol foto). Dipakai untuk menyimpan/memulihkan path foto.
+  late final Map<String, ({XFile? Function() get, void Function(XFile?) set})> _photoSlots = {
+    'KWH & Trafo': (get: () => _fotoKwh, set: (f) => _fotoKwh = f),
+    'PQS LVMDP': (get: () => _fotoLvmdpPqs, set: (f) => _fotoLvmdpPqs = f),
+    'Arus LVMDP': (get: () => _fotoLvmdpArus, set: (f) => _fotoLvmdpArus = f),
+    'Voltage LVMDP': (get: () => _fotoLvmdpVolt, set: (f) => _fotoLvmdpVolt = f),
+    'Freq LVMDP': (get: () => _fotoLvmdpFreq, set: (f) => _fotoLvmdpFreq = f),
+    'SMU Genset 01': (get: () => _fotoSmuGenset1, set: (f) => _fotoSmuGenset1 = f),
+    'SMU Genset 02': (get: () => _fotoSmuGenset2, set: (f) => _fotoSmuGenset2 = f),
+    'SMU Genset 03': (get: () => _fotoSmuGenset3, set: (f) => _fotoSmuGenset3 = f),
+    'Suhu Containment': (get: () => _fotoContainmentSuhu, set: (f) => _fotoContainmentSuhu = f),
+    'Tablet Containment': (get: () => _fotoContainmentTablet, set: (f) => _fotoContainmentTablet = f),
+  };
+
   String _generatedReportText = '';
   bool _reportSubmitted = false; // true hanya jika server membalas sukses
   String _submitNote = ''; // alasan terakhir gagal/ditolak (untuk status preview)
   Map<String, dynamic>? _pendingSubmission; // laporan yang belum berhasil terkirim (disimpan di perangkat)
 
+  /// SATU-SATUNYA daftar isian teks sederhana: key penyimpanan -> controller.
+  /// Dipakai oleh simpan, muat, reset, dan dispose. Menambah kolom baru cukup di sini.
+  /// Key HARUS tetap sama agar data tersimpan lama tetap terbaca.
+  late final Map<String, TextEditingController> _textFields = {
+    'kwh': _kwhCtrl, 'failedGenset': _failedGensetCtrl, 'failedPac': _failedPacCtrl,
+    'failedRecti': _failedRectiCtrl, 'failedUps': _failedUpsCtrl, 'lvmdpKva': _lvmdpKvaCtrl,
+    'lvmdpKw': _lvmdpKwCtrl, 'lvmdpCosPhi': _lvmdpCosPhiCtrl, 'lvmdpRs': _lvmdpRsCtrl,
+    'lvmdpSn': _lvmdpSnCtrl, 'lvmdpTn': _lvmdpTnCtrl, 'lvmdpNg': _lvmdpNgCtrl,
+    'lvmdpArusR': _lvmdpArusRCtrl, 'lvmdpArusS': _lvmdpArusSCtrl, 'lvmdpArusT': _lvmdpArusTCtrl,
+    'smuGenset1': _smuGenset1Ctrl, 'voltGenset1': _voltGenset1Ctrl, 'suhuGenset1': _suhuGenset1Ctrl,
+    'smuGenset2': _smuGenset2Ctrl, 'voltGenset2': _voltGenset2Ctrl, 'suhuGenset2': _suhuGenset2Ctrl,
+    'smuGenset3': _smuGenset3Ctrl, 'voltGenset3': _voltGenset3Ctrl, 'suhuGenset3': _suhuGenset3Ctrl,
+    'bbmB1Tinggi': _bbmB1TinggiCtrl, 'bbmB1Liter': _bbmB1LiterCtrl, 'bbmB2Tinggi': _bbmB2TinggiCtrl,
+    'bbmB2Liter': _bbmB2LiterCtrl, 'bbmB3Tinggi': _bbmB3TinggiCtrl, 'bbmB3Liter': _bbmB3LiterCtrl,
+    'bbmH1Tinggi': _bbmH1TinggiCtrl, 'bbmH1Liter': _bbmH1LiterCtrl, 'bbmH2Tinggi': _bbmH2TinggiCtrl,
+    'bbmH2Liter': _bbmH2LiterCtrl, 'totalSolar': _totalSolarCtrl, 'backupTime': _backupTimeCtrl,
+    'f1GensetTemp': _f1GensetTempCtrl, 'f1GensetHum': _f1GensetHumCtrl, 'f1TrafoTemp': _f1TrafoTempCtrl,
+    'f1TrafoHum': _f1TrafoHumCtrl, 'f2BattTemp': _f2BattTempCtrl, 'f2BattHum': _f2BattHumCtrl,
+    'f2RectiTemp': _f2RectiTempCtrl, 'f2RectiHum': _f2RectiHumCtrl, 'f2MscTemp': _f2MscTempCtrl,
+    'f2MscHum': _f2MscHumCtrl, 'f2CspsTemp': _f2CspsTempCtrl, 'f2CspsHum': _f2CspsHumCtrl,
+    'f3BattTemp': _f3BattTempCtrl, 'f3BattHum': _f3BattHumCtrl, 'f3RectiTemp': _f3RectiTempCtrl,
+    'f3RectiHum': _f3RectiHumCtrl, 'f3InvasTemp': _f3InvasTempCtrl, 'f3InvasHum': _f3InvasHumCtrl,
+    'f3CoreTemp': _f3CoreTempCtrl, 'f3CoreHum': _f3CoreHumCtrl, 'f3MkiosTemp': _f3MkiosTempCtrl,
+    'f3MkiosHum': _f3MkiosHumCtrl, 'f3OcsTemp': _f3OcsTempCtrl, 'f3OcsHum': _f3OcsHumCtrl,
+    'f4BattTemp': _f4BattTempCtrl, 'f4BattHum': _f4BattHumCtrl, 'f4RectiTemp': _f4RectiTempCtrl,
+    'f4RectiHum': _f4RectiHumCtrl, 'f4BscRncTemp': _f4BscRncTempCtrl, 'f4BscRncHum': _f4BscRncHumCtrl,
+    'f4InterTemp': _f4InterTempCtrl, 'f4InterHum': _f4InterHumCtrl, 'f4TransTemp': _f4TransTempCtrl,
+    'f4TransHum': _f4TransHumCtrl, 'f5UtilATemp': _f5UtilATempCtrl, 'f5UtilAHum': _f5UtilAHumCtrl,
+    'f5UtilBTemp': _f5UtilBTempCtrl, 'f5UtilBHum': _f5UtilBHumCtrl, 'f5DcTemp': _f5DcTempCtrl,
+    'f5DcHum': _f5DcHumCtrl,
+  };
+
   List<TextEditingController> get _allControllers => [
-    _kwhCtrl, _failedGensetCtrl, _failedPacCtrl, _failedRectiCtrl, _failedUpsCtrl,
-    _lvmdpKvaCtrl, _lvmdpKwCtrl, _lvmdpCosPhiCtrl, _lvmdpRsCtrl, _lvmdpSnCtrl, _lvmdpTnCtrl, _lvmdpNgCtrl, _lvmdpArusRCtrl, _lvmdpArusSCtrl, _lvmdpArusTCtrl,
-    _smuGenset1Ctrl, _voltGenset1Ctrl, _suhuGenset1Ctrl,
-    _smuGenset2Ctrl, _voltGenset2Ctrl, _suhuGenset2Ctrl,
-    _smuGenset3Ctrl, _voltGenset3Ctrl, _suhuGenset3Ctrl,
-    _bbmB1TinggiCtrl, _bbmB1LiterCtrl, _bbmB2TinggiCtrl, _bbmB2LiterCtrl, _bbmB3TinggiCtrl, _bbmB3LiterCtrl, _bbmH1TinggiCtrl, _bbmH1LiterCtrl, _bbmH2TinggiCtrl, _bbmH2LiterCtrl,
-    _totalSolarCtrl, _backupTimeCtrl,
-    _f1GensetTempCtrl, _f1GensetHumCtrl, _f1TrafoTempCtrl, _f1TrafoHumCtrl,
-    _f2BattTempCtrl, _f2BattHumCtrl, _f2RectiTempCtrl, _f2RectiHumCtrl, _f2MscTempCtrl, _f2MscHumCtrl, _f2CspsTempCtrl, _f2CspsHumCtrl,
-    _f3BattTempCtrl, _f3BattHumCtrl, _f3RectiTempCtrl, _f3RectiHumCtrl, _f3InvasTempCtrl, _f3InvasHumCtrl, _f3CoreTempCtrl, _f3CoreHumCtrl, _f3MkiosTempCtrl, _f3MkiosHumCtrl, _f3OcsTempCtrl, _f3OcsHumCtrl,
-    _f4BattTempCtrl, _f4BattHumCtrl, _f4RectiTempCtrl, _f4RectiHumCtrl, _f4BscRncTempCtrl, _f4BscRncHumCtrl, _f4InterTempCtrl, _f4InterHumCtrl, _f4TransTempCtrl, _f4TransHumCtrl,
-    _f5UtilATempCtrl, _f5UtilAHumCtrl, _f5UtilBTempCtrl, _f5UtilBHumCtrl, _f5DcTempCtrl, _f5DcHumCtrl,
+    ..._textFields.values,
     ..._rects.expand((r) => [r.kwCtrl, r.voltCtrl, r.occCtrl]),
-    _ups202.kwCtrl, _ups202.occCtrl, _ups202.voltCtrl, _ups202.pctCtrl, _ups202.runtimeCtrl,
-    _ups203.kwCtrl, _ups203.occCtrl, _ups203.voltCtrl, _ups203.pctCtrl, _ups203.runtimeCtrl,
-    _ups301.kwCtrl, _ups301.occCtrl, _ups301.voltCtrl, _ups301.pctCtrl, _ups301.runtimeCtrl,
-    _ups302.kwCtrl, _ups302.occCtrl, _ups302.voltCtrl, _ups302.pctCtrl, _ups302.runtimeCtrl,
-    _ups501.kwCtrl, _ups501.occCtrl, _ups501.voltCtrl, _ups501.pctCtrl, _ups501.runtimeCtrl,
-    _ups502.kwCtrl, _ups502.occCtrl, _ups502.voltCtrl, _ups502.pctCtrl, _ups502.runtimeCtrl,
+    for (final u in _upsItems) ...[u.kwCtrl, u.occCtrl, u.voltCtrl, u.pctCtrl, u.runtimeCtrl],
   ];
+
+  List<UpsItem> get _upsItems => [_ups202, _ups203, _ups301, _ups302, _ups501, _ups502];
 
   @override
   void initState() {
@@ -236,28 +271,16 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   }
 
   Map<String, dynamic> _buildCurrentDataMap() {
+    Map<String, String> upsMap(UpsItem u) => {
+      'kw': u.kwCtrl.text, 'occ': u.occCtrl.text, 'volt': u.voltCtrl.text, 'pct': u.pctCtrl.text, 'runtime': u.runtimeCtrl.text,
+    };
     return {
-      'statusPln': _statusPln, 'kwh': _kwhCtrl.text,
-      'failedGenset': _failedGensetCtrl.text, 'failedPac': _failedPacCtrl.text, 'failedRecti': _failedRectiCtrl.text, 'failedUps': _failedUpsCtrl.text,
-      'lvmdpKva': _lvmdpKvaCtrl.text, 'lvmdpKw': _lvmdpKwCtrl.text, 'lvmdpCosPhi': _lvmdpCosPhiCtrl.text, 'lvmdpRs': _lvmdpRsCtrl.text, 'lvmdpSn': _lvmdpSnCtrl.text, 'lvmdpTn': _lvmdpTnCtrl.text, 'lvmdpNg': _lvmdpNgCtrl.text, 'lvmdpArusR': _lvmdpArusRCtrl.text, 'lvmdpArusS': _lvmdpArusSCtrl.text, 'lvmdpArusT': _lvmdpArusTCtrl.text,
+      ..._textFields.map((key, ctrl) => MapEntry(key, ctrl.text)),
+      'statusPln': _statusPln,
       'genset1Mode': _genset1Mode, 'genset2Mode': _genset2Mode, 'genset3Mode': _genset3Mode,
-      'smuGenset1': _smuGenset1Ctrl.text, 'voltGenset1': _voltGenset1Ctrl.text, 'suhuGenset1': _suhuGenset1Ctrl.text,
-      'smuGenset2': _smuGenset2Ctrl.text, 'voltGenset2': _voltGenset2Ctrl.text, 'suhuGenset2': _suhuGenset2Ctrl.text,
-      'smuGenset3': _smuGenset3Ctrl.text, 'voltGenset3': _voltGenset3Ctrl.text, 'suhuGenset3': _suhuGenset3Ctrl.text,
-      'bbmB1Tinggi': _bbmB1TinggiCtrl.text, 'bbmB1Liter': _bbmB1LiterCtrl.text, 'bbmB2Tinggi': _bbmB2TinggiCtrl.text, 'bbmB2Liter': _bbmB2LiterCtrl.text, 'bbmB3Tinggi': _bbmB3TinggiCtrl.text, 'bbmB3Liter': _bbmB3LiterCtrl.text, 'bbmH1Tinggi': _bbmH1TinggiCtrl.text, 'bbmH1Liter': _bbmH1LiterCtrl.text, 'bbmH2Tinggi': _bbmH2TinggiCtrl.text, 'bbmH2Liter': _bbmH2LiterCtrl.text,
-      'totalSolar': _totalSolarCtrl.text, 'backupTime': _backupTimeCtrl.text,
-      'f1GensetTemp': _f1GensetTempCtrl.text, 'f1GensetHum': _f1GensetHumCtrl.text, 'f1TrafoTemp': _f1TrafoTempCtrl.text, 'f1TrafoHum': _f1TrafoHumCtrl.text,
-      'f2BattTemp': _f2BattTempCtrl.text, 'f2BattHum': _f2BattHumCtrl.text, 'f2RectiTemp': _f2RectiTempCtrl.text, 'f2RectiHum': _f2RectiHumCtrl.text, 'f2MscTemp': _f2MscTempCtrl.text, 'f2MscHum': _f2MscHumCtrl.text, 'f2CspsTemp': _f2CspsTempCtrl.text, 'f2CspsHum': _f2CspsHumCtrl.text,
-      'f3BattTemp': _f3BattTempCtrl.text, 'f3BattHum': _f3BattHumCtrl.text, 'f3RectiTemp': _f3RectiTempCtrl.text, 'f3RectiHum': _f3RectiHumCtrl.text, 'f3InvasTemp': _f3InvasTempCtrl.text, 'f3InvasHum': _f3InvasHumCtrl.text, 'f3CoreTemp': _f3CoreTempCtrl.text, 'f3CoreHum': _f3CoreHumCtrl.text, 'f3MkiosTemp': _f3MkiosTempCtrl.text, 'f3MkiosHum': _f3MkiosHumCtrl.text, 'f3OcsTemp': _f3OcsTempCtrl.text, 'f3OcsHum': _f3OcsHumCtrl.text,
-      'f4BattTemp': _f4BattTempCtrl.text, 'f4BattHum': _f4BattHumCtrl.text, 'f4RectiTemp': _f4RectiTempCtrl.text, 'f4RectiHum': _f4RectiHumCtrl.text, 'f4BscRncTemp': _f4BscRncTempCtrl.text, 'f4BscRncHum': _f4BscRncHumCtrl.text, 'f4InterTemp': _f4InterTempCtrl.text, 'f4InterHum': _f4InterHumCtrl.text, 'f4TransTemp': _f4TransTempCtrl.text, 'f4TransHum': _f4TransHumCtrl.text,
-      'f5UtilATemp': _f5UtilATempCtrl.text, 'f5UtilAHum': _f5UtilAHumCtrl.text, 'f5UtilBTemp': _f5UtilBTempCtrl.text, 'f5UtilBHum': _f5UtilBHumCtrl.text, 'f5DcTemp': _f5DcTempCtrl.text, 'f5DcHum': _f5DcHumCtrl.text,
       'rects': _rects.map((r) => {'kw': r.kwCtrl.text, 'volt': r.voltCtrl.text, 'occ': r.occCtrl.text}).toList(),
-      'ups202': { 'kw': _ups202.kwCtrl.text, 'occ': _ups202.occCtrl.text, 'volt': _ups202.voltCtrl.text, 'pct': _ups202.pctCtrl.text, 'runtime': _ups202.runtimeCtrl.text },
-      'ups203': { 'kw': _ups203.kwCtrl.text, 'occ': _ups203.occCtrl.text, 'volt': _ups203.voltCtrl.text, 'pct': _ups203.pctCtrl.text, 'runtime': _ups203.runtimeCtrl.text },
-      'ups301': { 'kw': _ups301.kwCtrl.text, 'occ': _ups301.occCtrl.text, 'volt': _ups301.voltCtrl.text, 'pct': _ups301.pctCtrl.text, 'runtime': _ups301.runtimeCtrl.text },
-      'ups302': { 'kw': _ups302.kwCtrl.text, 'occ': _ups302.occCtrl.text, 'volt': _ups302.voltCtrl.text, 'pct': _ups302.pctCtrl.text, 'runtime': _ups302.runtimeCtrl.text },
-      'ups501': { 'kw': _ups501.kwCtrl.text, 'occ': _ups501.occCtrl.text, 'volt': _ups501.voltCtrl.text, 'pct': _ups501.pctCtrl.text, 'runtime': _ups501.runtimeCtrl.text },
-      'ups502': { 'kw': _ups502.kwCtrl.text, 'occ': _ups502.occCtrl.text, 'volt': _ups502.voltCtrl.text, 'pct': _ups502.pctCtrl.text, 'runtime': _ups502.runtimeCtrl.text },
+      'ups202': upsMap(_ups202), 'ups203': upsMap(_ups203), 'ups301': upsMap(_ups301),
+      'ups302': upsMap(_ups302), 'ups501': upsMap(_ups501), 'ups502': upsMap(_ups502),
       'pelaksana1': _pelaksana1, 'pelaksana2': _pelaksana2,
     };
   }
@@ -311,17 +334,14 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       try {
         final data = jsonDecode(jsonStr) as Map<String, dynamic>;
         setState(() {
-          _statusPln = data['statusPln'] ?? 'ON'; _kwhCtrl.text = data['kwh'] ?? '';
-          _failedGensetCtrl.text = data['failedGenset'] ?? ''; _failedPacCtrl.text = data['failedPac'] ?? ''; _failedRectiCtrl.text = data['failedRecti'] ?? ''; _failedUpsCtrl.text = data['failedUps'] ?? '';
-          _lvmdpKvaCtrl.text = data['lvmdpKva'] ?? ''; _lvmdpKwCtrl.text = data['lvmdpKw'] ?? ''; _lvmdpCosPhiCtrl.text = data['lvmdpCosPhi'] ?? ''; _lvmdpRsCtrl.text = data['lvmdpRs'] ?? ''; _lvmdpSnCtrl.text = data['lvmdpSn'] ?? ''; _lvmdpTnCtrl.text = data['lvmdpTn'] ?? ''; _lvmdpNgCtrl.text = data['lvmdpNg'] ?? ''; _lvmdpArusRCtrl.text = data['lvmdpArusR'] ?? ''; _lvmdpArusSCtrl.text = data['lvmdpArusS'] ?? ''; _lvmdpArusTCtrl.text = data['lvmdpArusT'] ?? '';
-          _genset1Mode = data['genset1Mode'] ?? 'Standby Auto'; _genset2Mode = data['genset2Mode'] ?? 'Standby Auto'; _genset3Mode = data['genset3Mode'] ?? 'Standby Auto';
-          _smuGenset1Ctrl.text = data['smuGenset1'] ?? ''; _voltGenset1Ctrl.text = data['voltGenset1'] ?? ''; _suhuGenset1Ctrl.text = data['suhuGenset1'] ?? '';
-          _smuGenset2Ctrl.text = data['smuGenset2'] ?? ''; _voltGenset2Ctrl.text = data['voltGenset2'] ?? ''; _suhuGenset2Ctrl.text = data['suhuGenset2'] ?? '';
-          _smuGenset3Ctrl.text = data['smuGenset3'] ?? ''; _voltGenset3Ctrl.text = data['voltGenset3'] ?? ''; _suhuGenset3Ctrl.text = data['suhuGenset3'] ?? '';
-          _bbmB1TinggiCtrl.text = data['bbmB1Tinggi'] ?? ''; _bbmB1LiterCtrl.text = data['bbmB1Liter'] ?? ''; _bbmB2TinggiCtrl.text = data['bbmB2Tinggi'] ?? ''; _bbmB2LiterCtrl.text = data['bbmB2Liter'] ?? ''; _bbmB3TinggiCtrl.text = data['bbmB3Tinggi'] ?? ''; _bbmB3LiterCtrl.text = data['bbmB3Liter'] ?? ''; _bbmH1TinggiCtrl.text = data['bbmH1Tinggi'] ?? ''; _bbmH1LiterCtrl.text = data['bbmH1Liter'] ?? ''; _bbmH2TinggiCtrl.text = data['bbmH2Tinggi'] ?? ''; _bbmH2LiterCtrl.text = data['bbmH2Liter'] ?? '';
-          _totalSolarCtrl.text = data['totalSolar'] ?? ''; _backupTimeCtrl.text = data['backupTime'] ?? '0 Jam/0 Hari';
-          _f1GensetTempCtrl.text = data['f1GensetTemp'] ?? ''; _f1GensetHumCtrl.text = data['f1GensetHum'] ?? ''; _f1TrafoTempCtrl.text = data['f1TrafoTemp'] ?? ''; _f1TrafoHumCtrl.text = data['f1TrafoHum'] ?? '';
-          _f2BattTempCtrl.text = data['f2BattTemp'] ?? ''; _f2BattHumCtrl.text = data['f2BattHum'] ?? ''; _f2RectiTempCtrl.text = data['f2RectiTemp'] ?? ''; _f2RectiHumCtrl.text = data['f2RectiHum'] ?? ''; _f2MscTempCtrl.text = data['f2MscTemp'] ?? ''; _f2MscHumCtrl.text = data['f2MscHum'] ?? ''; _f2CspsTempCtrl.text = data['f2CspsTemp'] ?? ''; _f2CspsHumCtrl.text = data['f2CspsHum'] ?? '';
+          _statusPln = data['statusPln'] ?? 'ON';
+          _genset1Mode = data['genset1Mode'] ?? 'Standby Auto';
+          _genset2Mode = data['genset2Mode'] ?? 'Standby Auto';
+          _genset3Mode = data['genset3Mode'] ?? 'Standby Auto';
+          _textFields.forEach((key, ctrl) {
+            final saved = data[key];
+            ctrl.text = saved is String ? saved : (key == 'backupTime' ? '0 Jam/0 Hari' : '');
+          });
 
           if (data['rects'] != null) {
             final list = data['rects'] as List<dynamic>;
@@ -345,10 +365,6 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
           applyUps(_ups301, data['ups301']); applyUps(_ups302, data['ups302']);
           applyUps(_ups501, data['ups501']); applyUps(_ups502, data['ups502']);
 
-          _f3BattTempCtrl.text = data['f3BattTemp'] ?? ''; _f3BattHumCtrl.text = data['f3BattHum'] ?? ''; _f3RectiTempCtrl.text = data['f3RectiTemp'] ?? ''; _f3RectiHumCtrl.text = data['f3RectiHum'] ?? ''; _f3InvasTempCtrl.text = data['f3InvasTemp'] ?? ''; _f3InvasHumCtrl.text = data['f3InvasHum'] ?? ''; _f3CoreTempCtrl.text = data['f3CoreTemp'] ?? ''; _f3CoreHumCtrl.text = data['f3CoreHum'] ?? ''; _f3MkiosTempCtrl.text = data['f3MkiosTemp'] ?? ''; _f3MkiosHumCtrl.text = data['f3MkiosHum'] ?? ''; _f3OcsTempCtrl.text = data['f3OcsTemp'] ?? ''; _f3OcsHumCtrl.text = data['f3OcsHum'] ?? '';
-          _f4BattTempCtrl.text = data['f4BattTemp'] ?? ''; _f4BattHumCtrl.text = data['f4BattHum'] ?? ''; _f4RectiTempCtrl.text = data['f4RectiTemp'] ?? ''; _f4RectiHumCtrl.text = data['f4RectiHum'] ?? ''; _f4BscRncTempCtrl.text = data['f4BscRncTemp'] ?? ''; _f4BscRncHumCtrl.text = data['f4BscRncHum'] ?? ''; _f4InterTempCtrl.text = data['f4InterTemp'] ?? ''; _f4InterHumCtrl.text = data['f4InterHum'] ?? ''; _f4TransTempCtrl.text = data['f4TransTemp'] ?? ''; _f4TransHumCtrl.text = data['f4TransHum'] ?? '';
-          _f5UtilATempCtrl.text = data['f5UtilATemp'] ?? ''; _f5UtilAHumCtrl.text = data['f5UtilAHum'] ?? ''; _f5UtilBTempCtrl.text = data['f5UtilBTemp'] ?? ''; _f5UtilBHumCtrl.text = data['f5UtilBHum'] ?? ''; _f5DcTempCtrl.text = data['f5DcTemp'] ?? ''; _f5DcHumCtrl.text = data['f5DcHum'] ?? '';
-
           // Pastikan nilai cache pelaksana ada di list pelaksana baru (mencegah error Dropdown)
           if (data['pelaksana1'] != null && _listPelaksana.contains(data['pelaksana1'])) {
             _pelaksana1 = data['pelaksana1'];
@@ -361,6 +377,8 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         debugPrint('Error loading saved form data: $e');
       }
     }
+
+    await _restorePhotos(prefs);
 
     for (final ctrl in _allControllers) {
       ctrl.addListener(() {
@@ -393,12 +411,17 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     if (!mounted) return;
     if (confirmed == true) {
+      _photoSlots.forEach((_, slot) {
+        final f = slot.get();
+        if (f != null) _deleteFileQuietly(f.path);
+      });
       for (final ctrl in _allControllers) { ctrl.text = ''; }
       _backupTimeCtrl.text = '0 Jam/0 Hari'; _statusPln = 'ON'; _genset1Mode = 'Standby Auto'; _genset2Mode = 'Standby Auto'; _genset3Mode = 'Standby Auto';
       setState(() {
         _generatedReportText = ''; _reportSubmitted = false; _fotoKwh = null; _fotoLvmdpPqs = null; _fotoLvmdpArus = null; _fotoLvmdpVolt = null; _fotoLvmdpFreq = null; _fotoSmuGenset1 = null; _fotoSmuGenset2 = null; _fotoSmuGenset3 = null; _fotoContainmentSuhu = null; _fotoContainmentTablet = null;
       });
       await _saveFormData();
+      await _persistPhotos();
       AppNotifier.success('Form berhasil direset ke 0!');
     }
   }
@@ -412,47 +435,127 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   Future<void> _takePhoto(String title, Function(XFile) onSaved) async {
     try {
+      // Catat tujuan foto: jika Android mematikan app saat kamera terbuka, foto bisa dipulihkan
+      // ke slot yang benar saat halaman dibuka lagi.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pendingPhotoKey, title);
+
       final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
-      if (photo != null) {
-        final targetPath = '${photo.path}_compressed.jpg';
-        final compressedFile = await FlutterImageCompress.compressAndGetFile(
-          photo.path, targetPath, quality: 60, minWidth: 1024, minHeight: 1024,
-        );
-        if (!mounted) return;
-        if (compressedFile != null) {
-          setState(() { onSaved(XFile(compressedFile.path)); });
-          AppNotifier.success('Foto $title berhasil disimpan');
-        }
+      if (photo == null) {
+        await prefs.remove(_pendingPhotoKey);
+        return;
       }
+
+      final saved = await _compressPhoto(photo.path);
+      await prefs.remove(_pendingPhotoKey);
+      if (saved == null) return;
+
+      final old = _photoSlots[title]?.get();
+      if (!mounted) {
+        // Halaman sudah ditutup saat kamera terbuka: tetap simpan agar muncul saat dibuka lagi.
+        onSaved(saved);
+        await _persistPhotos();
+        return;
+      }
+      setState(() { onSaved(saved); });
+      if (old != null && old.path != saved.path) _deleteFileQuietly(old.path);
+      await _persistPhotos();
+      AppNotifier.success('Foto $title berhasil disimpan');
     } catch (e) {
       AppNotifier.error('Gagal membuka kamera: $e');
+    }
+  }
+
+  /// Kompres foto lalu hapus file asli kamera supaya penyimpanan tidak menumpuk.
+  Future<XFile?> _compressPhoto(String originalPath) async {
+    final targetPath = '${originalPath}_compressed.jpg';
+    final compressed = await FlutterImageCompress.compressAndGetFile(
+      originalPath, targetPath, quality: 60, minWidth: 1024, minHeight: 1024,
+    );
+    if (compressed == null) return null;
+    if (compressed.path != originalPath) _deleteFileQuietly(originalPath);
+    return XFile(compressed.path);
+  }
+
+  void _deleteFileQuietly(String path) {
+    try {
+      final f = File(path);
+      if (f.existsSync()) f.deleteSync();
+    } catch (_) {}
+  }
+
+  /// Simpan path foto yang sudah diambil, agar tidak hilang jika aplikasi tertutup/dimatikan.
+  Future<void> _persistPhotos() async {
+    final prefs = await SharedPreferences.getInstance();
+    final map = <String, String>{};
+    _photoSlots.forEach((title, slot) {
+      final f = slot.get();
+      if (f != null) map[title] = f.path;
+    });
+    await prefs.setString(_photosKey, jsonEncode(map));
+  }
+
+  Future<void> _restorePhotos(SharedPreferences prefs) async {
+    final raw = prefs.getString(_photosKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+        if (!mounted) return;
+        setState(() {
+          map.forEach((title, path) {
+            final slot = _photoSlots[title];
+            if (slot != null && path is String && File(path).existsSync()) slot.set(XFile(path));
+          });
+        });
+      } catch (e) {
+        debugPrint('Gagal memulihkan foto: $e');
+      }
+    }
+
+    // Android bisa mematikan aplikasi saat kamera terbuka: pulihkan foto yang "tersangkut".
+    try {
+      final lost = await _picker.retrieveLostData();
+      final lostFile = lost.file;
+      final title = prefs.getString(_pendingPhotoKey);
+      if (!lost.isEmpty && lostFile != null && title != null && _photoSlots.containsKey(title)) {
+        final saved = await _compressPhoto(lostFile.path);
+        if (saved != null && mounted) {
+          final old = _photoSlots[title]!.get();
+          setState(() => _photoSlots[title]!.set(saved));
+          if (old != null && old.path != saved.path) _deleteFileQuietly(old.path);
+          await _persistPhotos();
+          AppNotifier.success('Foto $title dipulihkan');
+        }
+      }
+      await prefs.remove(_pendingPhotoKey);
+    } catch (e) {
+      debugPrint('retrieveLostData gagal: $e');
     }
   }
 
   Future<ui.Image> _loadUiImage(File file) async {
     final bytes = await file.readAsBytes();
     final codec = await ui.instantiateImageCodec(bytes);
-    final frame = await codec.getNextFrame();
-    return frame.image;
+    try {
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } finally {
+      codec.dispose(); // melepas memori native; gambar hasil frame tetap valid
+    }
   }
 
+  // BoxFit.contain: seluruh foto terlihat (angka di meter tidak terpotong), sisanya latar gelap.
   void _drawPhotoOnCanvas(Canvas canvas, ui.Image? img, Rect dst, String title) {
+    canvas.drawRect(dst, Paint()..color = const Color(0xFF1E1E1E));
     if (img != null) {
       final double imgW = img.width.toDouble();
       final double imgH = img.height.toDouble();
-      final double scale = math.max(dst.width / imgW, dst.height / imgH);
-      final double srcW = dst.width / scale;
-      final double srcH = dst.height / scale;
-      final double srcX = (imgW - srcW) / 2.0;
-      final double srcY = (imgH - srcH) / 2.0;
-
-      canvas.save();
-      canvas.clipRect(dst);
-      canvas.drawImageRect(img, Rect.fromLTWH(srcX, srcY, srcW, srcH), dst, Paint());
-      canvas.restore();
+      final double scale = math.min(dst.width / imgW, dst.height / imgH);
+      final double w = imgW * scale;
+      final double h = imgH * scale;
+      final target = Rect.fromLTWH(dst.left + (dst.width - w) / 2, dst.top + (dst.height - h) / 2, w, h);
+      canvas.drawImageRect(img, Rect.fromLTWH(0, 0, imgW, imgH), target, Paint()..filterQuality = FilterQuality.high);
     } else {
-      final bgPaint = Paint()..color = const Color(0xFF1E1E1E);
-      canvas.drawRect(dst, bgPaint);
       final textPainter = TextPainter(
         text: TextSpan(text: '$title\n(Belum Ada Foto)', style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold)),
         textAlign: TextAlign.center, textDirection: TextDirection.ltr,
@@ -463,8 +566,11 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     canvas.drawRect(dst, borderPaint);
   }
 
+  // Kolase dirender 2x (lebar 1440 px) agar angka pada meter tetap terbaca.
+  static const double _collageScale = 2.0;
+
   Future<void> _downloadSingleCollage(int index) async {
-    // Validasi Foto (Tetap sama, disingkat visualnya)
+    // Validasi foto: semua foto kolase wajib ada
     if (index == 1 && (_fotoKwh == null || _fotoLvmdpArus == null || _fotoLvmdpPqs == null || _fotoLvmdpVolt == null || _fotoLvmdpFreq == null)) {
       AppNotifier.error('Foto belum lengkap!'); return;
     } else if (index == 2 && (_fotoSmuGenset1 == null || _fotoSmuGenset2 == null || _fotoSmuGenset3 == null)) {
@@ -473,72 +579,95 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       AppNotifier.error('Foto Containment belum lengkap!'); return;
     }
 
-    String collageName = '';
     AppNotifier.info('Menyusun kolase...', duration: const Duration(seconds: 1));
 
+    final loaded = <ui.Image>[]; // dilepas di finally agar memori native tidak bocor
     try {
-      final recorder = ui.PictureRecorder();
-      Uint8List? pngBytes;
+      Future<ui.Image?> load(XFile? f) async {
+        if (f == null) return null;
+        final img = await _loadUiImage(File(f.path));
+        loaded.add(img);
+        return img;
+      }
+
+      final String collageName;
+      final double w;
+      final double h;
+      final List<({Rect rect, ui.Image? img, String title})> cells;
 
       if (index == 1) {
         collageName = 'Kolase 1 (KWH & LVMDP)';
-        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 720, 900));
-        final imgKwh = _fotoKwh != null ? await _loadUiImage(File(_fotoKwh!.path)) : null;
-        final imgArus = _fotoLvmdpArus != null ? await _loadUiImage(File(_fotoLvmdpArus!.path)) : null;
-        final imgPqs = _fotoLvmdpPqs != null ? await _loadUiImage(File(_fotoLvmdpPqs!.path)) : null;
-        final imgVolt = _fotoLvmdpVolt != null ? await _loadUiImage(File(_fotoLvmdpVolt!.path)) : null;
-        final imgFreq = _fotoLvmdpFreq != null ? await _loadUiImage(File(_fotoLvmdpFreq!.path)) : null;
-
-        _drawPhotoOnCanvas(canvas, imgKwh, const Rect.fromLTWH(0, 0, 360, 450), 'KWH Meter');
-        _drawPhotoOnCanvas(canvas, imgArus, const Rect.fromLTWH(360, 0, 360, 450), 'Arus LVMDP');
-        _drawPhotoOnCanvas(canvas, imgPqs, const Rect.fromLTWH(0, 450, 240, 450), 'PQS LVMDP');
-        _drawPhotoOnCanvas(canvas, imgVolt, const Rect.fromLTWH(240, 450, 240, 450), 'Voltage LVMDP');
-        _drawPhotoOnCanvas(canvas, imgFreq, const Rect.fromLTWH(480, 450, 240, 450), 'Freq LVMDP');
-
-        final pic = recorder.endRecording();
-        final img = await pic.toImage(720, 900);
-        final bd = await img.toByteData(format: ui.ImageByteFormat.png);
-        pngBytes = bd?.buffer.asUint8List();
+        w = 720; h = 900;
+        cells = [
+          (rect: const Rect.fromLTWH(0, 0, 360, 450), img: await load(_fotoKwh), title: 'KWH Meter'),
+          (rect: const Rect.fromLTWH(360, 0, 360, 450), img: await load(_fotoLvmdpArus), title: 'Arus LVMDP'),
+          (rect: const Rect.fromLTWH(0, 450, 240, 450), img: await load(_fotoLvmdpPqs), title: 'PQS LVMDP'),
+          (rect: const Rect.fromLTWH(240, 450, 240, 450), img: await load(_fotoLvmdpVolt), title: 'Voltage LVMDP'),
+          (rect: const Rect.fromLTWH(480, 450, 240, 450), img: await load(_fotoLvmdpFreq), title: 'Freq LVMDP'),
+        ];
       } else if (index == 2) {
         collageName = 'Kolase 2 (SMU Genset)';
-        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 720, 720));
-        final imgG1 = _fotoSmuGenset1 != null ? await _loadUiImage(File(_fotoSmuGenset1!.path)) : null;
-        final imgG2 = _fotoSmuGenset2 != null ? await _loadUiImage(File(_fotoSmuGenset2!.path)) : null;
-        final imgG3 = _fotoSmuGenset3 != null ? await _loadUiImage(File(_fotoSmuGenset3!.path)) : null;
-
-        _drawPhotoOnCanvas(canvas, imgG1, const Rect.fromLTWH(0, 0, 720, 360), 'SMU Genset 01');
-        _drawPhotoOnCanvas(canvas, imgG2, const Rect.fromLTWH(0, 360, 360, 360), 'SMU Genset 02');
-        _drawPhotoOnCanvas(canvas, imgG3, const Rect.fromLTWH(360, 360, 360, 360), 'SMU Genset 03');
-
-        final pic = recorder.endRecording();
-        final img = await pic.toImage(720, 720);
-        final bd = await img.toByteData(format: ui.ImageByteFormat.png);
-        pngBytes = bd?.buffer.asUint8List();
+        w = 720; h = 720;
+        cells = [
+          (rect: const Rect.fromLTWH(0, 0, 720, 360), img: await load(_fotoSmuGenset1), title: 'SMU Genset 01'),
+          (rect: const Rect.fromLTWH(0, 360, 360, 360), img: await load(_fotoSmuGenset2), title: 'SMU Genset 02'),
+          (rect: const Rect.fromLTWH(360, 360, 360, 360), img: await load(_fotoSmuGenset3), title: 'SMU Genset 03'),
+        ];
       } else {
         collageName = 'Kolase 3 (Containment)';
-        final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 720, 480));
-        final imgTab = _fotoContainmentTablet != null ? await _loadUiImage(File(_fotoContainmentTablet!.path)) : null;
-        final imgSuhu = _fotoContainmentSuhu != null ? await _loadUiImage(File(_fotoContainmentSuhu!.path)) : null;
-
-        _drawPhotoOnCanvas(canvas, imgTab, const Rect.fromLTWH(0, 0, 360, 480), 'Tablet Containment');
-        _drawPhotoOnCanvas(canvas, imgSuhu, const Rect.fromLTWH(360, 0, 360, 480), 'Suhu Containment');
-
-        final pic = recorder.endRecording();
-        final img = await pic.toImage(720, 480);
-        final bd = await img.toByteData(format: ui.ImageByteFormat.png);
-        pngBytes = bd?.buffer.asUint8List();
+        w = 720; h = 480;
+        cells = [
+          (rect: const Rect.fromLTWH(0, 0, 360, 480), img: await load(_fotoContainmentTablet), title: 'Tablet Containment'),
+          (rect: const Rect.fromLTWH(360, 0, 360, 480), img: await load(_fotoContainmentSuhu), title: 'Suhu Containment'),
+        ];
       }
 
-      if (pngBytes != null) {
-        final hasAccess = await Gal.hasAccess();
-        if (!hasAccess) await Gal.requestAccess();
-        await Gal.putImageBytes(pngBytes, name: '${collageName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}');
-        if (mounted) {
-          AppNotifier.success('$collageName berhasil disimpan ke Galeri HP!');
+      final pxW = (w * _collageScale).round();
+      final pxH = (h * _collageScale).round();
+      final recorder = ui.PictureRecorder();
+      // Cull rect harus seukuran kanvas hasil (setelah skala), kalau tidak gambar terpotong.
+      final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, pxW.toDouble(), pxH.toDouble()));
+      canvas.scale(_collageScale);
+      for (final c in cells) {
+        _drawPhotoOnCanvas(canvas, c.img, c.rect, c.title);
+      }
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(pxW, pxH);
+      final bd = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      picture.dispose();
+
+      final pngBytes = bd?.buffer.asUint8List();
+      if (pngBytes == null) {
+        AppNotifier.error('Gagal membuat kolase.');
+        return;
+      }
+
+      // JPEG jauh lebih kecil daripada PNG untuk foto; jika konversi gagal, pakai PNG.
+      Uint8List outBytes = pngBytes;
+      try {
+        final jpg = await FlutterImageCompress.compressWithList(
+          pngBytes, minWidth: pxW, minHeight: pxH, quality: 88, format: CompressFormat.jpeg,
+        );
+        if (jpg.isNotEmpty) outBytes = jpg;
+      } catch (_) {}
+
+      if (!await Gal.hasAccess()) {
+        final granted = await Gal.requestAccess();
+        if (!granted) {
+          AppNotifier.error('Izin menyimpan ke Galeri ditolak.');
+          return;
         }
       }
+      final safeName = collageName.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+      await Gal.putImageBytes(outBytes, name: '${safeName}_${DateTime.now().millisecondsSinceEpoch}');
+      AppNotifier.success('$collageName berhasil disimpan ke Galeri HP!');
     } catch (e) {
       AppNotifier.error('Gagal menyimpan kolase: $e');
+    } finally {
+      for (final img in loaded) {
+        img.dispose();
+      }
     }
   }
 
@@ -615,9 +744,10 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     return flat;
   }
 
-  ({List<String> zeroList, List<String> sameList}) _checkZeroAndSameWarnings() {
+  ({List<String> zeroList, List<String> sameList, List<String> rangeList}) _checkZeroAndSameWarnings() {
     final zeroList = <String>[];
     final sameList = <String>[];
+    final rangeList = <String>[];
     final prev = _flattenLastSubmitted();
 
     bool isZero(String val) {
@@ -626,9 +756,17 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       return n == null || n == 0;
     }
 
-    void verify(String fieldKey, String label, String currentVal, {bool allowSame = false}) {
+    // allowZero: nilai 0/kosong memang wajar (mis. jumlah perangkat failed) -> tidak diperingatkan.
+    // max: batas atas yang masuk akal (RH/persen 100, Cos Phi 1, total perangkat); melebihi -> peringatan.
+    void verify(String fieldKey, String label, String currentVal, {bool allowSame = false, bool allowZero = false, double? max}) {
+      if (max != null) {
+        final n = NumberUtils.parseDecimal(currentVal);
+        if (n != null && n > max) {
+          rangeList.add('$label: $currentVal (maks ${max % 1 == 0 ? max.toInt() : max})');
+        }
+      }
       if (isZero(currentVal)) {
-        zeroList.add(label);
+        if (!allowZero) zeroList.add(label);
       } else if (!allowSame && prev.isNotEmpty) {
         final prevVal = prev[fieldKey]?.toString();
         if (prevVal != null && prevVal.isNotEmpty && prevVal.trim() == currentVal.trim()) {
@@ -639,14 +777,14 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     verify('kwh', 'KWH Meter', _kwhCtrl.text);
 
-    verify('failedGenset', 'Perangkat Failed: Genset', _failedGensetCtrl.text, allowSame: true);
-    verify('failedPac', 'Perangkat Failed: PAC', _failedPacCtrl.text, allowSame: true);
-    verify('failedRecti', 'Perangkat Failed: Rectifier', _failedRectiCtrl.text, allowSame: true);
-    verify('failedUps', 'Perangkat Failed: UPS', _failedUpsCtrl.text, allowSame: true);
+    verify('failedGenset', 'Perangkat Failed: Genset', _failedGensetCtrl.text, allowSame: true, allowZero: true, max: 3);
+    verify('failedPac', 'Perangkat Failed: PAC', _failedPacCtrl.text, allowSame: true, allowZero: true, max: 52);
+    verify('failedRecti', 'Perangkat Failed: Rectifier', _failedRectiCtrl.text, allowSame: true, allowZero: true, max: 13);
+    verify('failedUps', 'Perangkat Failed: UPS', _failedUpsCtrl.text, allowSame: true, allowZero: true, max: 7);
 
     verify('lvmdpKva', 'LVMDP: KVA', _lvmdpKvaCtrl.text);
     verify('lvmdpKw', 'LVMDP: KW', _lvmdpKwCtrl.text);
-    verify('lvmdpCosPhi', 'LVMDP: Cos Phi', _lvmdpCosPhiCtrl.text);
+    verify('lvmdpCosPhi', 'LVMDP: Cos Phi', _lvmdpCosPhiCtrl.text, max: 1);
     verify('lvmdpRs', 'LVMDP: Tegangan R-N', _lvmdpRsCtrl.text);
     verify('lvmdpSn', 'LVMDP: Tegangan S-N', _lvmdpSnCtrl.text);
     verify('lvmdpTn', 'LVMDP: Tegangan T-N', _lvmdpTnCtrl.text);
@@ -672,62 +810,62 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     verify('bbmH2Liter', 'Volume Tangki Harian 2', _bbmH2LiterCtrl.text, allowSame: true);
 
     verify('f1GensetTemp', 'Floor 1: R. Genset Suhu', _f1GensetTempCtrl.text);
-    verify('f1GensetHum', 'Floor 1: R. Genset RH', _f1GensetHumCtrl.text);
+    verify('f1GensetHum', 'Floor 1: R. Genset RH', _f1GensetHumCtrl.text, max: 100);
     verify('f1TrafoTemp', 'Floor 1: R. Trafo Suhu', _f1TrafoTempCtrl.text);
-    verify('f1TrafoHum', 'Floor 1: R. Trafo RH', _f1TrafoHumCtrl.text);
+    verify('f1TrafoHum', 'Floor 1: R. Trafo RH', _f1TrafoHumCtrl.text, max: 100);
 
     verify('f2BattTemp', 'Floor 2: R. Battery Suhu', _f2BattTempCtrl.text);
-    verify('f2BattHum', 'Floor 2: R. Battery RH', _f2BattHumCtrl.text);
+    verify('f2BattHum', 'Floor 2: R. Battery RH', _f2BattHumCtrl.text, max: 100);
     verify('f2RectiTemp', 'Floor 2: R. Rectifier Suhu', _f2RectiTempCtrl.text);
-    verify('f2RectiHum', 'Floor 2: R. Rectifier RH', _f2RectiHumCtrl.text);
+    verify('f2RectiHum', 'Floor 2: R. Rectifier RH', _f2RectiHumCtrl.text, max: 100);
     verify('f2MscTemp', 'Floor 2: R. Msc Suhu', _f2MscTempCtrl.text);
-    verify('f2MscHum', 'Floor 2: R. Msc RH', _f2MscHumCtrl.text);
+    verify('f2MscHum', 'Floor 2: R. Msc RH', _f2MscHumCtrl.text, max: 100);
     verify('f2CspsTemp', 'Floor 2: R. Csps Suhu', _f2CspsTempCtrl.text);
-    verify('f2CspsHum', 'Floor 2: R. Csps RH', _f2CspsHumCtrl.text);
+    verify('f2CspsHum', 'Floor 2: R. Csps RH', _f2CspsHumCtrl.text, max: 100);
 
     verify('f3BattTemp', 'Floor 3: R. Battery Suhu', _f3BattTempCtrl.text);
-    verify('f3BattHum', 'Floor 3: R. Battery RH', _f3BattHumCtrl.text);
+    verify('f3BattHum', 'Floor 3: R. Battery RH', _f3BattHumCtrl.text, max: 100);
     verify('f3RectiTemp', 'Floor 3: R. Rectifier Suhu', _f3RectiTempCtrl.text);
-    verify('f3RectiHum', 'Floor 3: R. Rectifier RH', _f3RectiHumCtrl.text);
+    verify('f3RectiHum', 'Floor 3: R. Rectifier RH', _f3RectiHumCtrl.text, max: 100);
     verify('f3InvasTemp', 'Floor 3: R. Invas Suhu', _f3InvasTempCtrl.text);
-    verify('f3InvasHum', 'Floor 3: R. Invas RH', _f3InvasHumCtrl.text);
+    verify('f3InvasHum', 'Floor 3: R. Invas RH', _f3InvasHumCtrl.text, max: 100);
     verify('f3CoreTemp', 'Floor 3: R. Core Suhu', _f3CoreTempCtrl.text);
-    verify('f3CoreHum', 'Floor 3: R. Core RH', _f3CoreHumCtrl.text);
+    verify('f3CoreHum', 'Floor 3: R. Core RH', _f3CoreHumCtrl.text, max: 100);
     verify('f3MkiosTemp', 'Floor 3: R. Mkios Suhu', _f3MkiosTempCtrl.text);
-    verify('f3MkiosHum', 'Floor 3: R. Mkios RH', _f3MkiosHumCtrl.text);
+    verify('f3MkiosHum', 'Floor 3: R. Mkios RH', _f3MkiosHumCtrl.text, max: 100);
     verify('f3OcsTemp', 'Floor 3: R. Ocs Suhu', _f3OcsTempCtrl.text);
-    verify('f3OcsHum', 'Floor 3: R. Ocs RH', _f3OcsHumCtrl.text);
+    verify('f3OcsHum', 'Floor 3: R. Ocs RH', _f3OcsHumCtrl.text, max: 100);
 
     verify('f4BattTemp', 'Floor 4: R. Battery Suhu', _f4BattTempCtrl.text);
-    verify('f4BattHum', 'Floor 4: R. Battery RH', _f4BattHumCtrl.text);
+    verify('f4BattHum', 'Floor 4: R. Battery RH', _f4BattHumCtrl.text, max: 100);
     verify('f4RectiTemp', 'Floor 4: R. Rectifier Suhu', _f4RectiTempCtrl.text);
-    verify('f4RectiHum', 'Floor 4: R. Rectifier RH', _f4RectiHumCtrl.text);
+    verify('f4RectiHum', 'Floor 4: R. Rectifier RH', _f4RectiHumCtrl.text, max: 100);
     verify('f4BscRncTemp', 'Floor 4: R. BSC RNC Suhu', _f4BscRncTempCtrl.text);
-    verify('f4BscRncHum', 'Floor 4: R. BSC RNC RH', _f4BscRncHumCtrl.text);
+    verify('f4BscRncHum', 'Floor 4: R. BSC RNC RH', _f4BscRncHumCtrl.text, max: 100);
     verify('f4InterTemp', 'Floor 4: R. Interkoneksi Suhu', _f4InterTempCtrl.text);
-    verify('f4InterHum', 'Floor 4: R. Interkoneksi RH', _f4InterHumCtrl.text);
+    verify('f4InterHum', 'Floor 4: R. Interkoneksi RH', _f4InterHumCtrl.text, max: 100);
     verify('f4TransTemp', 'Floor 4: R. Transmisi Suhu', _f4TransTempCtrl.text);
-    verify('f4TransHum', 'Floor 4: R. Transmisi RH', _f4TransHumCtrl.text);
+    verify('f4TransHum', 'Floor 4: R. Transmisi RH', _f4TransHumCtrl.text, max: 100);
 
     verify('f5UtilATemp', 'Floor 5: R. Utility A Suhu', _f5UtilATempCtrl.text);
-    verify('f5UtilAHum', 'Floor 5: R. Utility A RH', _f5UtilAHumCtrl.text);
+    verify('f5UtilAHum', 'Floor 5: R. Utility A RH', _f5UtilAHumCtrl.text, max: 100);
     verify('f5UtilBTemp', 'Floor 5: R. Utility B Suhu', _f5UtilBTempCtrl.text);
-    verify('f5UtilBHum', 'Floor 5: R. Utility B RH', _f5UtilBHumCtrl.text);
+    verify('f5UtilBHum', 'Floor 5: R. Utility B RH', _f5UtilBHumCtrl.text, max: 100);
     verify('f5DcTemp', 'Floor 5: R. Data Center Suhu', _f5DcTempCtrl.text);
-    verify('f5DcHum', 'Floor 5: R. Data Center RH', _f5DcHumCtrl.text);
+    verify('f5DcHum', 'Floor 5: R. Data Center RH', _f5DcHumCtrl.text, max: 100);
 
     for (int i = 0; i < _rects.length; i++) {
       final num = (i + 1).toString().padLeft(2, '0');
       verify('rect_${i}_kw', 'Rect. $num Load (KW)', _rects[i].kwCtrl.text);
       verify('rect_${i}_volt', 'Rect. $num Voltage', _rects[i].voltCtrl.text);
-      verify('rect_${i}_occ', 'Rect. $num Occupancy', _rects[i].occCtrl.text);
+      verify('rect_${i}_occ', 'Rect. $num Occupancy', _rects[i].occCtrl.text, max: 100);
     }
 
     void checkUps(String code, UpsItem ups) {
       verify('ups_${code}_kw', 'UPS $code Load (KW)', ups.kwCtrl.text);
-      verify('ups_${code}_occ', 'UPS $code Occupancy (%)', ups.occCtrl.text);
+      verify('ups_${code}_occ', 'UPS $code Occupancy (%)', ups.occCtrl.text, max: 100);
       verify('ups_${code}_volt', 'UPS $code Batt Volt', ups.voltCtrl.text);
-      verify('ups_${code}_pct', 'UPS $code Batt %', ups.pctCtrl.text);
+      verify('ups_${code}_pct', 'UPS $code Batt %', ups.pctCtrl.text, max: 100);
       verify('ups_${code}_runtime', 'UPS $code Est. Runtime', ups.runtimeCtrl.text);
     }
 
@@ -738,7 +876,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     checkUps('5.01', _ups501);
     checkUps('5.02', _ups502);
 
-    return (zeroList: zeroList, sameList: sameList);
+    return (zeroList: zeroList, sameList: sameList, rangeList: rangeList);
   }
 
   // --- PENGIRIMAN KE APPS SCRIPT ---
@@ -1115,8 +1253,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     final warnings = _checkZeroAndSameWarnings();
     final hasZero = warnings.zeroList.isNotEmpty;
     final hasSame = warnings.sameList.isNotEmpty;
+    final hasRange = warnings.rangeList.isNotEmpty;
 
-    if (hasZero || hasSame) {
+    if (hasZero || hasSame || hasRange) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -1179,6 +1318,28 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('• ', style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.bold)),
+                          Expanded(child: Text(e, style: const TextStyle(fontSize: 12))),
+                        ],
+                      ),
+                    )),
+                  ],
+                  if (hasRange) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.deepOrange.shade50, borderRadius: BorderRadius.circular(6)),
+                      child: Text(
+                        'Nilai Di Luar Batas Wajar (${warnings.rangeList.length}):',
+                        style: TextStyle(color: Colors.deepOrange.shade900, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ...warnings.rangeList.map((e) => Padding(
+                      padding: const EdgeInsets.only(left: 6, bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('• ', style: TextStyle(color: Colors.deepOrange.shade900, fontWeight: FontWeight.bold)),
                           Expanded(child: Text(e, style: const TextStyle(fontSize: 12))),
                         ],
                       ),
@@ -1452,7 +1613,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(25),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Row(
@@ -1601,7 +1762,10 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   Widget _buildPelaksanaDropdown(String label, String? value, void Function(String?) assign) {
     return DropdownButtonFormField<String>(
-      value: _listPelaksana.contains(value) ? value : null,
+      // initialValue hanya dibaca saat field dibuat; key ikut berubah bersama nilai/daftar
+      // supaya pilihan yang dipulihkan dari penyimpanan tetap tampil.
+      key: ValueKey('$label|$value|${_listPelaksana.join(',')}'),
+      initialValue: _listPelaksana.contains(value) ? value : null,
       isExpanded: true,
       hint: Text(_listPelaksana.isEmpty ? 'Belum ada data' : 'Pilih', style: const TextStyle(fontSize: 13)),
       decoration: InputDecoration(labelText: label, isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),

@@ -8,8 +8,21 @@ Future<void> main() async {
   // Pastikan binding framework Flutter sudah siap sebelum memanggil fungsi async
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Muat file environment
-  await dotenv.load(fileName: ".env");
+  // Muat file environment. isOptional: jika .env hilang, aplikasi tetap terbuka (env kosong)
+  // dan memberi tahu pengguna, bukan crash di layar putih.
+  try {
+    await dotenv.load(fileName: ".env", isOptional: true);
+  } catch (e) {
+    debugPrint('Gagal memuat .env: $e');
+  }
+
+  final scriptUrl = dotenv.isInitialized ? (dotenv.env['SCRIPT_URL'] ?? '') : '';
+  if (scriptUrl.isEmpty) {
+    AppNotifier.error(
+      'Konfigurasi server (SCRIPT_URL di file .env) tidak ditemukan. Pengiriman data tidak akan berfungsi sampai aplikasi diperbarui.',
+      duration: const Duration(seconds: 10),
+    );
+  }
 
   runApp(const ChecklistGedungApp());
 }

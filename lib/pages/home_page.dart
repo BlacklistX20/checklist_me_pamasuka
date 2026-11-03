@@ -196,7 +196,7 @@ class _HomePageState extends State<HomePage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.08),
+        shadowColor: Colors.black.withValues(alpha: 0.08),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
@@ -255,7 +255,7 @@ class _HomePageState extends State<HomePage> {
             decoration: BoxDecoration(
               gradient: const LinearGradient(colors: [Color(0xFFFFFFFF), Color(0xFFFFFFFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: primaryRed.withOpacity(0.25), blurRadius: 12, offset: const Offset(0, 4))],
+              boxShadow: [BoxShadow(color: primaryRed.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))],
             ),
             child: Column(
               children: [
@@ -269,7 +269,7 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 12),
                 const Text('Facility Monitoring', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text('Sistem Checklist ME PAMASUKA', style: TextStyle(color: Colors.black.withOpacity(0.85), fontSize: 12.5)),
+                Text('Sistem Checklist ME PAMASUKA', style: TextStyle(color: Colors.black.withValues(alpha: 0.85), fontSize: 12.5)),
               ],
             ),
           ),

@@ -11,6 +11,9 @@ class FailedDevicesCard extends StatelessWidget {
   final String totalRecti;
   final String totalUps;
 
+  /// Total perangkat dari teks seperti '/52' -> 52 (dipakai sebagai batas nilai).
+  static double? _maxOf(String total) => double.tryParse(total.replaceAll('/', '').trim());
+
   const FailedDevicesCard({
     super.key,
     required this.gensetCtrl,
@@ -41,19 +44,19 @@ class FailedDevicesCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: UnitInputField(label: 'Genset', controller: gensetCtrl, unit: totalGenset),
+                child: UnitInputField(label: 'Genset', controller: gensetCtrl, unit: totalGenset, maxValue: _maxOf(totalGenset)),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: UnitInputField(label: 'PAC', controller: pacCtrl, unit: totalPac),
+                child: UnitInputField(label: 'PAC', controller: pacCtrl, unit: totalPac, maxValue: _maxOf(totalPac)),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: UnitInputField(label: 'Rectifier', controller: rectiCtrl, unit: totalRecti),
+                child: UnitInputField(label: 'Rectifier', controller: rectiCtrl, unit: totalRecti, maxValue: _maxOf(totalRecti)),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: UnitInputField(label: 'UPS', controller: upsCtrl, unit: totalUps),
+                child: UnitInputField(label: 'UPS', controller: upsCtrl, unit: totalUps, maxValue: _maxOf(totalUps)),
               ),
             ],
           ),

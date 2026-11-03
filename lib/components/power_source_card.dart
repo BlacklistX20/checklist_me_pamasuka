@@ -3,7 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'unit_input_field.dart';
 import 'custom_dropdown_field.dart';
 
-class PowerSourceCard extends StatelessWidget {
+class PowerSourceCard extends StatefulWidget {
   final String title;
   final String statusPln;
   final TextEditingController kwhController;
@@ -24,7 +24,28 @@ class PowerSourceCard extends StatelessWidget {
   });
 
   @override
+  State<PowerSourceCard> createState() => _PowerSourceCardState();
+}
+
+class _PowerSourceCardState extends State<PowerSourceCard> {
+  // Dibuat sekali dan di-dispose (sebelumnya dibuat ulang di setiap build dan bocor).
+  late final TextEditingController _capCtrl = TextEditingController(text: widget.capTrafo);
+
+  @override
+  void didUpdateWidget(covariant PowerSourceCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.capTrafo != widget.capTrafo) _capCtrl.text = widget.capTrafo;
+  }
+
+  @override
+  void dispose() {
+    _capCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final hasPhoto = widget.savedPhoto != null;
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(12),
@@ -36,7 +57,7 @@ class PowerSourceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,20 +65,20 @@ class PowerSourceCard extends StatelessWidget {
               Expanded(
                 child: CustomDropdownField(
                   label: 'Status PLN',
-                  value: statusPln,
+                  value: widget.statusPln,
                   items: const ['ON', 'OFF'],
-                  onChanged: onStatusChanged,
+                  onChanged: widget.onStatusChanged,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: UnitInputField(label: 'KWH Meter', controller: kwhController, unit: 'KWH'),
+                child: UnitInputField(label: 'KWH Meter', controller: widget.kwhController, unit: 'KWH'),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: UnitInputField(
                   label: 'Cap. Trafo',
-                  controller: TextEditingController(text: capTrafo),
+                  controller: _capCtrl,
                   unit: 'KVA',
                   enabled: false,
                 ),
@@ -66,15 +87,19 @@ class PowerSourceCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           OutlinedButton.icon(
-            onPressed: onPhotoPressed,
+            onPressed: widget.onPhotoPressed,
             icon: Icon(
-              savedPhoto != null ? Icons.check_circle : Icons.camera_alt_outlined,
+              hasPhoto ? Icons.check_circle : Icons.camera_alt_outlined,
               size: 18,
-              color: savedPhoto != null ? Colors.green : null,
+              color: hasPhoto ? Colors.green : null,
             ),
-            label: Text(savedPhoto != null ? 'Foto KWH Tersimpan (Ambil Ulang)' : 'Ambil Foto KWH & Trafo'),
+            label: Text(
+              hasPhoto ? 'Foto KWH Tersimpan (Ambil Ulang)' : 'Ambil Foto KWH & Trafo',
+              style: TextStyle(color: hasPhoto ? Colors.green.shade800 : null),
+            ),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(40),
+              side: BorderSide(color: hasPhoto ? Colors.green : Colors.grey.shade400),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
