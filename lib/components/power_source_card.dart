@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'section_card.dart';
 import 'package:image_picker/image_picker.dart';
 import 'unit_input_field.dart';
 import 'custom_dropdown_field.dart';
@@ -46,14 +47,7 @@ class _PowerSourceCardState extends State<PowerSourceCard> {
   @override
   Widget build(BuildContext context) {
     final hasPhoto = widget.savedPhoto != null;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+    return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -63,6 +57,7 @@ class _PowerSourceCardState extends State<PowerSourceCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
+                flex: 3, // status hanya "ON"/"OFF": cukup sempit
                 child: CustomDropdownField(
                   label: 'Status PLN',
                   value: widget.statusPln,
@@ -72,10 +67,12 @@ class _PowerSourceCardState extends State<PowerSourceCard> {
               ),
               const SizedBox(width: 8),
               Expanded(
+                flex: 5, // angka KWH bisa 6-7 digit: butuh ruang terbesar
                 child: UnitInputField(label: 'KWH Meter', controller: widget.kwhController, unit: 'KWH'),
               ),
               const SizedBox(width: 8),
               Expanded(
+                flex: 4,
                 child: UnitInputField(
                   label: 'Cap. Trafo',
                   controller: _capCtrl,
@@ -94,7 +91,7 @@ class _PowerSourceCardState extends State<PowerSourceCard> {
               color: hasPhoto ? Colors.green : null,
             ),
             label: Text(
-              hasPhoto ? 'Foto KWH Tersimpan (Ambil Ulang)' : 'Ambil Foto KWH & Trafo',
+              hasPhoto ? 'Foto KWH Tersimpan (Lihat / Ambil Ulang)' : 'Ambil Foto KWH & Trafo',
               style: TextStyle(color: hasPhoto ? Colors.green.shade800 : null),
             ),
             style: OutlinedButton.styleFrom(

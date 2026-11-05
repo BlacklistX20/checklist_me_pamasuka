@@ -25,7 +25,9 @@ import '../components/tank_card.dart';
 import '../components/number_utils.dart';
 import '../components/app_notifier.dart';
 import '../components/apps_script_client.dart';
+import '../components/photo_preview.dart';
 import '../components/pin_auth.dart';
+import '../components/section_card.dart';
 import '../components/room_temp_card.dart';
 import '../components/rectifier_card.dart';
 import '../components/ups_card.dart';
@@ -46,7 +48,23 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   int _currentTab = 0;
   bool _isSubmitting = false; // State Status Pengiriman
-  final List<String> _tabs = ['1', '2', '3', '4', '5', 'Report'];
+  final List<String> _tabs = ['Lt.1', 'Lt.2', 'Lt.3', 'Lt.4', 'Lt.5', 'Report'];
+  final List<String> _tabNames = ['Lantai 1', 'Lantai 2', 'Lantai 3', 'Lantai 4', 'Lantai 5', 'Laporan'];
+
+  // Konstanta site: ubah di sini, bukan di tengah kode.
+  static const String _kNomorOlo = '089646442994';
+  static const String _kCapTrafo = '2000';
+  static const String _kKapGenset1 = '750';
+  static const String _kKapGenset2 = '1000';
+  static const String _kKapGenset3 = '750';
+  static const double _kLitersPerHour = 134; // konsumsi solar (liter/jam) untuk estimasi Backup Time
+  static const List<int> _rectBounds = [0, 6, 10, 13]; // pembagian Rectifier: Lt.2 / Lt.3 / Lt.4
+
+  String _rectTitle(int group) {
+    final from = (_rectBounds[group] + 1).toString().padLeft(2, '0');
+    final to = _rectBounds[group + 1].toString().padLeft(2, '0');
+    return 'Checklist Rectifier (Rect. $from - $to HUAWEI)';
+  }
 
   final ImagePicker _picker = ImagePicker();
   Map<String, dynamic> _lastSubmittedData = {};
@@ -264,6 +282,98 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   List<UpsItem> get _upsItems => [_ups202, _ups203, _ups301, _ups302, _ups501, _ups502];
 
+  /// Controller isian tiap tab, dipakai untuk penanda kelengkapan di bar bawah dan kartu
+  /// "Kelengkapan Isian". Field turunan otomatis (Total Solar, Backup Time) tidak dihitung.
+  List<TextEditingController> _controllersForTab(int tab) {
+    List<TextEditingController> rectCtrls(int group) => _rects
+        .sublist(_rectBounds[group], _rectBounds[group + 1])
+        .expand((r) => [r.kwCtrl, r.voltCtrl, r.occCtrl])
+        .toList();
+    List<TextEditingController> upsCtrls(UpsItem u) => [u.kwCtrl, u.occCtrl, u.voltCtrl, u.pctCtrl, u.runtimeCtrl];
+
+    switch (tab) {
+      case 0:
+        return [
+          _kwhCtrl, _failedGensetCtrl, _failedPacCtrl, _failedRectiCtrl,
+          _failedUpsCtrl, _lvmdpKvaCtrl, _lvmdpKwCtrl, _lvmdpCosPhiCtrl,
+          _lvmdpRsCtrl, _lvmdpSnCtrl, _lvmdpTnCtrl, _lvmdpNgCtrl,
+          _lvmdpArusRCtrl, _lvmdpArusSCtrl, _lvmdpArusTCtrl, _smuGenset1Ctrl,
+          _voltGenset1Ctrl, _suhuGenset1Ctrl, _smuGenset2Ctrl, _voltGenset2Ctrl,
+          _suhuGenset2Ctrl, _smuGenset3Ctrl, _voltGenset3Ctrl, _suhuGenset3Ctrl,
+          _bbmB1TinggiCtrl, _bbmB1LiterCtrl, _bbmB2TinggiCtrl, _bbmB2LiterCtrl,
+          _bbmB3TinggiCtrl, _bbmB3LiterCtrl, _bbmH1TinggiCtrl, _bbmH1LiterCtrl,
+          _bbmH2TinggiCtrl, _bbmH2LiterCtrl, _f1GensetTempCtrl, _f1GensetHumCtrl,
+          _f1TrafoTempCtrl, _f1TrafoHumCtrl,
+        ];
+      case 1:
+        return [
+          _f2BattTempCtrl, _f2BattHumCtrl, _f2RectiTempCtrl, _f2RectiHumCtrl,
+          _f2MscTempCtrl, _f2MscHumCtrl, _f2CspsTempCtrl, _f2CspsHumCtrl,
+          ...rectCtrls(0), ...upsCtrls(_ups202), ...upsCtrls(_ups203),
+        ];
+      case 2:
+        return [
+          _f3BattTempCtrl, _f3BattHumCtrl, _f3RectiTempCtrl, _f3RectiHumCtrl,
+          _f3InvasTempCtrl, _f3InvasHumCtrl, _f3CoreTempCtrl, _f3CoreHumCtrl,
+          _f3MkiosTempCtrl, _f3MkiosHumCtrl, _f3OcsTempCtrl, _f3OcsHumCtrl,
+          ...rectCtrls(1), ...upsCtrls(_ups301), ...upsCtrls(_ups302),
+        ];
+      case 3:
+        return [
+          _f4BattTempCtrl, _f4BattHumCtrl, _f4RectiTempCtrl, _f4RectiHumCtrl,
+          _f4BscRncTempCtrl, _f4BscRncHumCtrl, _f4InterTempCtrl, _f4InterHumCtrl,
+          _f4TransTempCtrl, _f4TransHumCtrl,
+          ...rectCtrls(2),
+        ];
+      case 4:
+        return [
+          _f5UtilATempCtrl, _f5UtilAHumCtrl, _f5UtilBTempCtrl, _f5UtilBHumCtrl,
+          _f5DcTempCtrl, _f5DcHumCtrl,
+          ...upsCtrls(_ups501), ...upsCtrls(_ups502),
+        ];
+      default:
+        return const [];
+    }
+  }
+
+  /// Foto yang diwajibkan per tab (kunci = judul tombol foto).
+  static const Map<int, List<String>> _tabPhotoTitles = {
+    0: ['KWH & Trafo', 'PQS LVMDP', 'Arus LVMDP', 'Voltage LVMDP', 'Freq LVMDP', 'SMU Genset 01', 'SMU Genset 02', 'SMU Genset 03'],
+    4: ['Suhu Containment', 'Tablet Containment'],
+  };
+
+  late final Map<TextEditingController, int> _ctrlTab = {
+    for (int t = 0; t < 5; t++)
+      for (final c in _controllersForTab(t)) c: t,
+  };
+
+  Map<String, UpsItem> get _upsByCode => {
+    '2.02': _ups202, '2.03': _ups203, '3.01': _ups301, '3.02': _ups302, '5.01': _ups501, '5.02': _ups502,
+  };
+
+  /// Tab tempat sebuah field berada (-1 jika tidak diketahui). [key] = kunci simpan/verify.
+  int _tabForKey(String key) {
+    TextEditingController? ctrl = _textFields[key];
+    if (ctrl == null && key.startsWith('rect_')) {
+      final i = int.tryParse(key.split('_')[1]);
+      if (i != null && i >= 0 && i < _rects.length) ctrl = _rects[i].kwCtrl;
+    } else if (ctrl == null && key.startsWith('ups_')) {
+      ctrl = _upsByCode[key.split('_')[1]]?.kwCtrl;
+    }
+    return ctrl == null ? -1 : (_ctrlTab[ctrl] ?? -1);
+  }
+
+  ({int filled, int total}) _tabProgress(int tab) {
+    final ctrls = _controllersForTab(tab);
+    var filled = ctrls.where((c) => c.text.trim().isNotEmpty).length;
+    var total = ctrls.length;
+    for (final title in _tabPhotoTitles[tab] ?? const <String>[]) {
+      total++;
+      if (_photoSlots[title]?.get() != null) filled++;
+    }
+    return (filled: filled, total: total);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -396,14 +506,14 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reset Form?', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Semua angka isian form akan dikembalikan ke 0 untuk memulai inspeksi baru.'),
+        title: const Text('Kosongkan Form?', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Semua isian dan foto pada form akan dikosongkan untuk memulai inspeksi baru.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Batal')),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: primaryRed),
-            child: const Text('Reset ke 0', style: TextStyle(color: Colors.white)),
+            child: const Text('Kosongkan', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -422,7 +532,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       });
       await _saveFormData();
       await _persistPhotos();
-      AppNotifier.success('Form berhasil direset ke 0!');
+      AppNotifier.success('Form berhasil dikosongkan!');
     }
   }
 
@@ -433,7 +543,18 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     super.dispose();
   }
 
+  /// Tombol foto: jika foto sudah ada, tampilkan pratinjau (bisa diperbesar) dengan pilihan
+  /// "Ambil Ulang"; jika belum, langsung buka kamera.
   Future<void> _takePhoto(String title, Function(XFile) onSaved) async {
+    final existing = _photoSlots[title]?.get();
+    if (existing != null) {
+      final retake = await showPhotoPreview(context, title: title, path: existing.path);
+      if (!retake || !mounted) return;
+    }
+    await _captureAndSave(title, onSaved);
+  }
+
+  Future<void> _captureAndSave(String title, Function(XFile) onSaved) async {
     try {
       // Catat tujuan foto: jika Android mematikan app saat kamera terbuka, foto bisa dipulihkan
       // ke slot yang benar saat halaman dibuka lagi.
@@ -680,7 +801,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
     final total = (b1 + b2 + b3 + h1 + h2).round();
     _totalSolarCtrl.text = NumberUtils.formatThousands(total);
-    final hours = total > 0 ? (total / 134).round() : 0;
+    final hours = total > 0 ? (total / _kLitersPerHour).round() : 0;
     final days = (hours / 24).floor();
     _backupTimeCtrl.text = '$hours Jam/$days Hari';
     _saveFormData();
@@ -744,10 +865,11 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     return flat;
   }
 
-  ({List<String> zeroList, List<String> sameList, List<String> rangeList}) _checkZeroAndSameWarnings() {
+  ({List<String> zeroList, List<String> sameList, List<String> rangeList, List<int> problemTabs}) _checkZeroAndSameWarnings() {
     final zeroList = <String>[];
     final sameList = <String>[];
     final rangeList = <String>[];
+    final problemTabs = <int>{};
     final prev = _flattenLastSubmitted();
 
     bool isZero(String val) {
@@ -759,18 +881,26 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     // allowZero: nilai 0/kosong memang wajar (mis. jumlah perangkat failed) -> tidak diperingatkan.
     // max: batas atas yang masuk akal (RH/persen 100, Cos Phi 1, total perangkat); melebihi -> peringatan.
     void verify(String fieldKey, String label, String currentVal, {bool allowSame = false, bool allowZero = false, double? max}) {
+      // Label diberi awalan tab, mis. "[Lt.3] R. Battery Suhu", agar mudah dicari.
+      final tab = _tabForKey(fieldKey);
+      final shown = tab >= 0 ? '[${_tabs[tab]}] $label' : label;
+      void flag(List<String> list, String text) {
+        list.add(text);
+        if (tab >= 0) problemTabs.add(tab);
+      }
+
       if (max != null) {
         final n = NumberUtils.parseDecimal(currentVal);
         if (n != null && n > max) {
-          rangeList.add('$label: $currentVal (maks ${max % 1 == 0 ? max.toInt() : max})');
+          flag(rangeList, '$shown: $currentVal (maks ${max % 1 == 0 ? max.toInt() : max})');
         }
       }
       if (isZero(currentVal)) {
-        if (!allowZero) zeroList.add(label);
+        if (!allowZero) flag(zeroList, shown);
       } else if (!allowSame && prev.isNotEmpty) {
         final prevVal = prev[fieldKey]?.toString();
         if (prevVal != null && prevVal.isNotEmpty && prevVal.trim() == currentVal.trim()) {
-          sameList.add(label);
+          flag(sameList, shown);
         }
       }
     }
@@ -876,7 +1006,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
     checkUps('5.01', _ups501);
     checkUps('5.02', _ups502);
 
-    return (zeroList: zeroList, sameList: sameList, rangeList: rangeList);
+    return (zeroList: zeroList, sameList: sameList, rangeList: rangeList, problemTabs: (problemTabs.toList()..sort()));
   }
 
   // --- PENGIRIMAN KE APPS SCRIPT ---
@@ -1307,7 +1437,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(6)),
                       child: Text(
-                        'Belum Berubah dari Kemarin (${warnings.sameList.length}):',
+                        'Sama dengan Laporan Terakhir (${warnings.sameList.length}):',
                         style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ),
@@ -1344,6 +1474,24 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
                         ],
                       ),
                     )),
+                  ],
+                  if (warnings.problemTabs.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Text('Langsung ke tab:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final t in warnings.problemTabs)
+                          ActionChip(
+                            label: Text(_tabs[t], style: const TextStyle(fontSize: 12)),
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              setState(() => _currentTab = t);
+                            },
+                          ),
+                      ],
+                    ),
                   ],
                 ],
               ),
@@ -1410,10 +1558,10 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       "ID": reportId,
       "Hari/Tanggal": formatHariTanggal,
       "Waktu": jam,
-      "Nomor OLO": "089646442994",
+      "Nomor OLO": _kNomorOlo,
       "Status PLN": _statusPln,
       "KWH": _kwhCtrl.text,
-      "Capacity Trafo": "2000",
+      "Capacity Trafo": _kCapTrafo,
       "Genset Failed (3)": _failedGensetCtrl.text,
       "PAC Failed (52)": _failedPacCtrl.text,
       "Rectifier Failed (13)": _failedRectiCtrl.text,
@@ -1428,9 +1576,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
       "LVMDP_Load_R": _lvmdpArusRCtrl.text,
       "LVMDP_Load_S": _lvmdpArusSCtrl.text,
       "LVMDP_Load_T": _lvmdpArusTCtrl.text,
-      "Kap Genset 01": "750",
-      "Kap Genset 02": "1000",
-      "Kap Genset 03": "750",
+      "Kap Genset 01": _kKapGenset1,
+      "Kap Genset 02": _kKapGenset2,
+      "Kap Genset 03": _kKapGenset3,
       "Status Genset 01": _genset1Mode,
       "Status Genset 02": _genset2Mode,
       "Status Genset 03": _genset3Mode,
@@ -1579,7 +1727,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
             FHeader.nested(
               title: const Text('Checklist TTC Sudiang'),
               prefixes: [FHeaderAction.back(onPress: () => Navigator.of(context).pop())],
-              suffixes: [FHeaderAction(icon: const Icon(Icons.refresh, size: 20), onPress: _resetForm)],
+              suffixes: [FHeaderAction(icon: const Tooltip(message: 'Kosongkan form', child: Icon(Icons.restart_alt, size: 22)), onPress: _resetForm)],
             ),
 
             // Area Form yang bisa di-scroll
@@ -1587,7 +1735,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
               child: IndexedStack(
                 index: _currentTab,
                 children: [
-                  _buildTab1(), _buildTab2(), _buildTab3(), _buildTab4(), _buildTab5(), _buildTabReport(),
+                  // ExcludeFocus: tombol "Next" di keyboard tidak boleh melompat ke tab yang sedang tersembunyi.
+                  for (final entry in [_buildTab1(), _buildTab2(), _buildTab3(), _buildTab4(), _buildTab5(), _buildTabReport()].asMap().entries)
+                    ExcludeFocus(excluding: _currentTab != entry.key, child: entry.value),
                 ],
               ),
             ),
@@ -1616,24 +1766,62 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
         border: Border.all(color: Colors.grey.shade300),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(_tabs.length, (index) {
-          final isSelected = _currentTab == index;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                FocusScope.of(context).unfocus();
-                setState(() => _currentTab = index);
-              },
-              child: Container(
-                height: 58,
-                decoration: BoxDecoration(
-                  color: isSelected ? primaryRed : Colors.transparent,
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                alignment: Alignment.center,
-                child: Text(
+      // Mendengarkan semua isian agar penanda kelengkapan (mis. 12/40) ikut berubah saat mengetik.
+      child: ListenableBuilder(
+        listenable: Listenable.merge(_allControllers),
+        builder: (context, _) => Row(
+          children: List.generate(_tabs.length, (index) => Expanded(child: _buildPillTab(index))),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPillTab(int index) {
+    final isSelected = _currentTab == index;
+    final isReport = index == _tabs.length - 1;
+    final progress = isReport ? null : _tabProgress(index);
+    final complete = progress != null && progress.total > 0 && progress.filled >= progress.total;
+    final onColor = isSelected ? Colors.white : null;
+
+    Widget? status;
+    if (isReport) {
+      if (_pendingSubmission != null) {
+        status = Icon(Icons.error, size: 13, color: onColor ?? Colors.amber.shade800);
+      } else if (_reportSubmitted) {
+        status = Icon(Icons.check_circle, size: 13, color: onColor ?? Colors.green.shade700);
+      }
+    } else if (complete) {
+      status = Icon(Icons.check_circle, size: 13, color: onColor ?? Colors.green.shade700);
+    } else if (progress != null) {
+      status = Text(
+        '${progress.filled}/${progress.total}',
+        style: TextStyle(fontSize: 9.5, color: isSelected ? Colors.white70 : Colors.grey.shade600),
+      );
+    }
+
+    final semantics = progress == null
+        ? _tabNames[index]
+        : '${_tabNames[index]}, terisi ${progress.filled} dari ${progress.total}';
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: semantics,
+      child: Material(
+        color: isSelected ? primaryRed : Colors.transparent,
+        borderRadius: BorderRadius.circular(25),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(25),
+          onTap: () {
+            FocusScope.of(context).unfocus();
+            setState(() => _currentTab = index);
+          },
+          child: SizedBox(
+            height: 58,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
                   _tabs[index],
                   style: TextStyle(
                     fontSize: 13,
@@ -1641,19 +1829,17 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
                     color: isSelected ? Colors.white : Colors.black87,
                   ),
                 ),
-              ),
+                if (status != null) ...[const SizedBox(height: 2), status],
+              ],
             ),
-          );
-        }),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildCard({required String title, required List<Widget> children}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+    return SectionCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         const SizedBox(height: 10),
@@ -1664,10 +1850,13 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   Widget _buildTab1() {
     return ListView(
+      // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
+      // ignore: deprecated_member_use
+      cacheExtent: 2500,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         PowerSourceCard(
-          title: 'Power Source & Trafo', statusPln: _statusPln, kwhController: _kwhCtrl, capTrafo: '2000', savedPhoto: _fotoKwh,
+          title: 'Power Source & Trafo', statusPln: _statusPln, kwhController: _kwhCtrl, capTrafo: _kCapTrafo, savedPhoto: _fotoKwh,
           onStatusChanged: (val) { if (val != null) { setState(() => _statusPln = val); _saveFormData(); } },
           onPhotoPressed: () => _takePhoto('KWH & Trafo', (f) => _fotoKwh = f),
         ),
@@ -1682,11 +1871,11 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
         _buildCard(
           title: 'Update Status Genset',
           children: [
-            GensetCard(title: 'Genset 01 (750 KVA)', modeValue: _genset1Mode, onModeChanged: (val) { if (val != null) { setState(() => _genset1Mode = val); _saveFormData(); } }, smuCtrl: _smuGenset1Ctrl, voltCtrl: _voltGenset1Ctrl, suhuCtrl: _suhuGenset1Ctrl, savedPhoto: _fotoSmuGenset1, onPhotoPressed: () => _takePhoto('SMU Genset 01', (f) => _fotoSmuGenset1 = f)),
+            GensetCard(title: 'Genset 01 ($_kKapGenset1 KVA)', modeValue: _genset1Mode, onModeChanged: (val) { if (val != null) { setState(() => _genset1Mode = val); _saveFormData(); } }, smuCtrl: _smuGenset1Ctrl, voltCtrl: _voltGenset1Ctrl, suhuCtrl: _suhuGenset1Ctrl, savedPhoto: _fotoSmuGenset1, onPhotoPressed: () => _takePhoto('SMU Genset 01', (f) => _fotoSmuGenset1 = f)),
             const Divider(height: 20),
-            GensetCard(title: 'Genset 02 (1000 KVA)', modeValue: _genset2Mode, onModeChanged: (val) { if (val != null) { setState(() => _genset2Mode = val); _saveFormData(); } }, smuCtrl: _smuGenset2Ctrl, voltCtrl: _voltGenset2Ctrl, suhuCtrl: _suhuGenset2Ctrl, savedPhoto: _fotoSmuGenset2, onPhotoPressed: () => _takePhoto('SMU Genset 02', (f) => _fotoSmuGenset2 = f)),
+            GensetCard(title: 'Genset 02 ($_kKapGenset2 KVA)', modeValue: _genset2Mode, onModeChanged: (val) { if (val != null) { setState(() => _genset2Mode = val); _saveFormData(); } }, smuCtrl: _smuGenset2Ctrl, voltCtrl: _voltGenset2Ctrl, suhuCtrl: _suhuGenset2Ctrl, savedPhoto: _fotoSmuGenset2, onPhotoPressed: () => _takePhoto('SMU Genset 02', (f) => _fotoSmuGenset2 = f)),
             const Divider(height: 20),
-            GensetCard(title: 'Genset 03 (750 KVA)', modeValue: _genset3Mode, onModeChanged: (val) { if (val != null) { setState(() => _genset3Mode = val); _saveFormData(); } }, smuCtrl: _smuGenset3Ctrl, voltCtrl: _voltGenset3Ctrl, suhuCtrl: _suhuGenset3Ctrl, savedPhoto: _fotoSmuGenset3, onPhotoPressed: () => _takePhoto('SMU Genset 03', (f) => _fotoSmuGenset3 = f)),
+            GensetCard(title: 'Genset 03 ($_kKapGenset3 KVA)', modeValue: _genset3Mode, onModeChanged: (val) { if (val != null) { setState(() => _genset3Mode = val); _saveFormData(); } }, smuCtrl: _smuGenset3Ctrl, voltCtrl: _voltGenset3Ctrl, suhuCtrl: _suhuGenset3Ctrl, savedPhoto: _fotoSmuGenset3, onPhotoPressed: () => _takePhoto('SMU Genset 03', (f) => _fotoSmuGenset3 = f)),
           ],
         ),
         _buildCard(
@@ -1708,10 +1897,13 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   Widget _buildTab2() {
     return ListView(
+      // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
+      // ignore: deprecated_member_use
+      cacheExtent: 2500,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         RoomTempCard(title: 'Suhu Ruang Perangkat Floor #2', rooms: [RoomTempItem(name: 'R. Battery', tempCtrl: _f2BattTempCtrl, humCtrl: _f2BattHumCtrl), RoomTempItem(name: 'R. Rectifier', tempCtrl: _f2RectiTempCtrl, humCtrl: _f2RectiHumCtrl), RoomTempItem(name: 'R. Msc', tempCtrl: _f2MscTempCtrl, humCtrl: _f2MscHumCtrl), RoomTempItem(name: 'R. Csps', tempCtrl: _f2CspsTempCtrl, humCtrl: _f2CspsHumCtrl)]),
-        RectifierCard(title: 'Checklist Rectifier (Rect. 01 - 06 HUAWEI)', rectifiers: _rects.sublist(0, 6)),
+        RectifierCard(title: _rectTitle(0), rectifiers: _rects.sublist(_rectBounds[0], _rectBounds[1])),
         UpsCard(title: 'UPS 2.02 Eaton 100 KVA', item: _ups202), UpsCard(title: 'UPS 2.03 Eaton 100 KVA', item: _ups203),
       ],
     );
@@ -1719,10 +1911,13 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   Widget _buildTab3() {
     return ListView(
+      // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
+      // ignore: deprecated_member_use
+      cacheExtent: 2500,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         RoomTempCard(title: 'Suhu Ruang Perangkat Floor #3', rooms: [RoomTempItem(name: 'R. Battery', tempCtrl: _f3BattTempCtrl, humCtrl: _f3BattHumCtrl), RoomTempItem(name: 'R. Rectifier', tempCtrl: _f3RectiTempCtrl, humCtrl: _f3RectiHumCtrl), RoomTempItem(name: 'R. Invas', tempCtrl: _f3InvasTempCtrl, humCtrl: _f3InvasHumCtrl), RoomTempItem(name: 'R. Core', tempCtrl: _f3CoreTempCtrl, humCtrl: _f3CoreHumCtrl), RoomTempItem(name: 'R. Mkios', tempCtrl: _f3MkiosTempCtrl, humCtrl: _f3MkiosHumCtrl), RoomTempItem(name: 'R. Ocs', tempCtrl: _f3OcsTempCtrl, humCtrl: _f3OcsHumCtrl)]),
-        RectifierCard(title: 'Checklist Rectifier (Rect. 07 - 10 HUAWEI)', rectifiers: _rects.sublist(6, 10)),
+        RectifierCard(title: _rectTitle(1), rectifiers: _rects.sublist(_rectBounds[1], _rectBounds[2])),
         UpsCard(title: 'UPS 3.01 Eaton 125 KVA', item: _ups301), UpsCard(title: 'UPS 3.02 Eaton 125 KVA', item: _ups302),
       ],
     );
@@ -1730,16 +1925,22 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   Widget _buildTab4() {
     return ListView(
+      // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
+      // ignore: deprecated_member_use
+      cacheExtent: 2500,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         RoomTempCard(title: 'Suhu Ruang Perangkat Floor #4', rooms: [RoomTempItem(name: 'R. Battery', tempCtrl: _f4BattTempCtrl, humCtrl: _f4BattHumCtrl), RoomTempItem(name: 'R. Rectifier', tempCtrl: _f4RectiTempCtrl, humCtrl: _f4RectiHumCtrl), RoomTempItem(name: 'R. BSC RNC', tempCtrl: _f4BscRncTempCtrl, humCtrl: _f4BscRncHumCtrl), RoomTempItem(name: 'R. Interkoneksi', tempCtrl: _f4InterTempCtrl, humCtrl: _f4InterHumCtrl), RoomTempItem(name: 'R. Transmisi', tempCtrl: _f4TransTempCtrl, humCtrl: _f4TransHumCtrl)]),
-        RectifierCard(title: 'Checklist Rectifier (Rect. 11 - 13 HUAWEI)', rectifiers: _rects.sublist(10, 13)),
+        RectifierCard(title: _rectTitle(2), rectifiers: _rects.sublist(_rectBounds[2], _rectBounds[3])),
       ],
     );
   }
 
   Widget _buildTab5() {
     return ListView(
+      // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
+      // ignore: deprecated_member_use
+      cacheExtent: 2500,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         RoomTempCard(title: 'Suhu Ruang Perangkat Floor #5', rooms: [RoomTempItem(name: 'R. Utility A', tempCtrl: _f5UtilATempCtrl, humCtrl: _f5UtilAHumCtrl), RoomTempItem(name: 'R. Utility B', tempCtrl: _f5UtilBTempCtrl, humCtrl: _f5UtilBHumCtrl), RoomTempItem(name: 'R. Data Center', tempCtrl: _f5DcTempCtrl, humCtrl: _f5DcHumCtrl)]),
@@ -1748,15 +1949,53 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
           children: [
             Row(
               children: [
-                Expanded(child: OutlinedButton.icon(onPressed: () => _takePhoto('Suhu Containment', (f) => _fotoContainmentSuhu = f), icon: Icon(_fotoContainmentSuhu != null ? Icons.check_circle : Icons.camera_alt_outlined, size: 16, color: _fotoContainmentSuhu != null ? Colors.green : null), label: Text(_fotoContainmentSuhu != null ? 'Foto Suhu (Ada)' : 'Foto Suhu'), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10), side: BorderSide(color: _fotoContainmentSuhu != null ? Colors.green : Colors.grey.shade400), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))))),
+                Expanded(child: OutlinedButton.icon(onPressed: () => _takePhoto('Suhu Containment', (f) => _fotoContainmentSuhu = f), icon: Icon(_fotoContainmentSuhu != null ? Icons.check_circle : Icons.camera_alt_outlined, size: 16, color: _fotoContainmentSuhu != null ? Colors.green : null), label: Text(_fotoContainmentSuhu != null ? 'Foto Suhu (Lihat/Ulang)' : 'Foto Suhu'), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10), side: BorderSide(color: _fotoContainmentSuhu != null ? Colors.green : Colors.grey.shade400), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))))),
                 const SizedBox(width: 10),
-                Expanded(child: OutlinedButton.icon(onPressed: () => _takePhoto('Tablet Containment', (f) => _fotoContainmentTablet = f), icon: Icon(_fotoContainmentTablet != null ? Icons.check_circle : Icons.tablet_android_outlined, size: 16, color: _fotoContainmentTablet != null ? Colors.green : null), label: Text(_fotoContainmentTablet != null ? 'Foto Tablet (Ada)' : 'Foto Tablet'), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10), side: BorderSide(color: _fotoContainmentTablet != null ? Colors.green : Colors.grey.shade400), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))))),
+                Expanded(child: OutlinedButton.icon(onPressed: () => _takePhoto('Tablet Containment', (f) => _fotoContainmentTablet = f), icon: Icon(_fotoContainmentTablet != null ? Icons.check_circle : Icons.tablet_android_outlined, size: 16, color: _fotoContainmentTablet != null ? Colors.green : null), label: Text(_fotoContainmentTablet != null ? 'Foto Tablet (Lihat/Ulang)' : 'Foto Tablet'), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10), side: BorderSide(color: _fotoContainmentTablet != null ? Colors.green : Colors.grey.shade400), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))))),
               ],
             ),
           ],
         ),
         UpsCard(title: 'UPS 5.01 Eaton 125 KVA', item: _ups501), UpsCard(title: 'UPS 5.02 Eaton 125 KVA', item: _ups502),
       ],
+    );
+  }
+
+  Widget _buildProgressRow(int tab) {
+    final p = _tabProgress(tab);
+    final done = p.total > 0 && p.filled >= p.total;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => setState(() => _currentTab = tab),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            SizedBox(width: 66, child: Text(_tabNames[tab], style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: p.total == 0 ? 0 : p.filled / p.total,
+                  minHeight: 7,
+                  backgroundColor: Colors.grey.shade200,
+                  color: done ? Colors.green : Colors.amber.shade700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 46,
+              child: Text(
+                '${p.filled}/${p.total}',
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: done ? Colors.green.shade700 : Colors.grey.shade700),
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade500),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1785,6 +2024,9 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
 
   Widget _buildTabReport() {
     return ListView(
+      // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
+      // ignore: deprecated_member_use
+      cacheExtent: 2500,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         if (_pendingSubmission != null)
@@ -1821,6 +2063,17 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
               ),
             ],
           ),
+        _buildCard(
+          title: 'Kelengkapan Isian',
+          children: [
+            for (int t = 0; t < _tabs.length - 1; t++) _buildProgressRow(t),
+            const SizedBox(height: 4),
+            Text(
+              'Kolom kosong dan foto yang belum diambil dihitung belum lengkap. Ketuk baris untuk membuka lantainya.',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
         _buildCard(
           title: 'Petugas Pelaksana',
           children: [
