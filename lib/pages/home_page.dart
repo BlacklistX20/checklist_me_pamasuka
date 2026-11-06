@@ -177,9 +177,11 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final verified = await showDialog<bool>(
+    final verified = await showFDialog<bool>(
       context: context,
-      builder: (_) => PinDialog(
+      builder: (context, style, animation) => PinDialog(
+        style: style,
+        animation: animation,
         verify: (pin) => _verifyPin(prefs: prefs, envKey: envKey, pin: pin, serverCheck: serverCheck, legacyHash: legacyHash),
       ),
     );
@@ -190,42 +192,26 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSiteButton({required BuildContext context, required String title, required String subtitle, required VoidCallback onTap}) {
+    // Kartu putih berbingkai seperti sebelumnya; FItem (Forui) menangani isi, sentuhan, dan fokus.
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Material(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        elevation: 1,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFFFFF1F2), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(FLucideIcons.building2, color: _HomePageState.primaryRed, size: 22),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
-                      const SizedBox(height: 2),
-                      Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.lock_outline_rounded, color: _HomePageState.primaryRed, size: 16),
-              ],
-            ),
-          ),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 1))],
+      ),
+      child: FItem(
+        prefix: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: const Color(0xFFFFF1F2), borderRadius: BorderRadius.circular(10)),
+          child: const Icon(FLucideIcons.building2, color: _HomePageState.primaryRed, size: 22),
         ),
+        title: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+        subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+        suffix: const Icon(FLucideIcons.lock, color: _HomePageState.primaryRed, size: 16),
+        onPress: onTap,
       ),
     );
   }
@@ -244,7 +230,7 @@ class _HomePageState extends State<HomePage> {
           if (_isSyncing)
             const Padding(padding: EdgeInsets.only(right: 16.0), child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))),
           if (!_isSyncing)
-            IconButton(icon: const Icon(Icons.sync), onPressed: () => _fetchConfigFromServer(showFeedback: true), tooltip: 'Sync Config'),
+            IconButton(icon: const Icon(FLucideIcons.refreshCw, size: 20), onPressed: () => _fetchConfigFromServer(showFeedback: true), tooltip: 'Sync Config'),
         ],
       ),
       body: ListView(
@@ -253,7 +239,7 @@ class _HomePageState extends State<HomePage> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFFFFFFFF), Color(0xFFFFFFFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [BoxShadow(color: primaryRed.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))],
             ),

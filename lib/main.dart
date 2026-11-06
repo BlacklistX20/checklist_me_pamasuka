@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 import 'package:forui/forui.dart';
 import 'components/app_notifier.dart';
+import 'components/app_theme.dart';
 import 'pages/home_page.dart';
 
 Future<void> main() async {
@@ -54,7 +55,7 @@ class ChecklistGedungApp extends StatelessWidget {
           // Batasi pembesaran font sistem (maks 1,3x) agar form yang padat tidak berantakan.
           data: mq.copyWith(textScaler: mq.textScaler.clamp(minScaleFactor: 1.0, maxScaleFactor: 1.3)),
           child: FTheme(
-            data: FTheme.neutral.light.touch,
+            data: AppTheme.forui,
             // Notifikasi global tampil di atas layar, di atas semua halaman dan dialog.
             child: AppNotificationHost(child: child!),
           ),

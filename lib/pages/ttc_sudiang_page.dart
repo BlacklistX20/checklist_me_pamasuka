@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1189,9 +1190,11 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Future<bool> _reauthenticate() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return false;
-    final ok = await showDialog<bool>(
+    final ok = await showFDialog<bool>(
       context: context,
-      builder: (_) => PinDialog(
+      builder: (context, style, animation) => PinDialog(
+        style: style,
+        animation: animation,
         title: 'Verifikasi Perangkat',
         description: 'Perangkat ini perlu diverifikasi ke server sebelum bisa mengirim laporan. '
             'Masukkan PIN site (butuh internet).',
@@ -1851,8 +1854,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Widget _buildTab1() {
     return ListView(
       // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
-      // ignore: deprecated_member_use
-      cacheExtent: 2500,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(2500),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         PowerSourceCard(
@@ -1898,8 +1900,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Widget _buildTab2() {
     return ListView(
       // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
-      // ignore: deprecated_member_use
-      cacheExtent: 2500,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(2500),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         RoomTempCard(title: 'Suhu Ruang Perangkat Floor #2', rooms: [RoomTempItem(name: 'R. Battery', tempCtrl: _f2BattTempCtrl, humCtrl: _f2BattHumCtrl), RoomTempItem(name: 'R. Rectifier', tempCtrl: _f2RectiTempCtrl, humCtrl: _f2RectiHumCtrl), RoomTempItem(name: 'R. Msc', tempCtrl: _f2MscTempCtrl, humCtrl: _f2MscHumCtrl), RoomTempItem(name: 'R. Csps', tempCtrl: _f2CspsTempCtrl, humCtrl: _f2CspsHumCtrl)]),
@@ -1912,8 +1913,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Widget _buildTab3() {
     return ListView(
       // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
-      // ignore: deprecated_member_use
-      cacheExtent: 2500,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(2500),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         RoomTempCard(title: 'Suhu Ruang Perangkat Floor #3', rooms: [RoomTempItem(name: 'R. Battery', tempCtrl: _f3BattTempCtrl, humCtrl: _f3BattHumCtrl), RoomTempItem(name: 'R. Rectifier', tempCtrl: _f3RectiTempCtrl, humCtrl: _f3RectiHumCtrl), RoomTempItem(name: 'R. Invas', tempCtrl: _f3InvasTempCtrl, humCtrl: _f3InvasHumCtrl), RoomTempItem(name: 'R. Core', tempCtrl: _f3CoreTempCtrl, humCtrl: _f3CoreHumCtrl), RoomTempItem(name: 'R. Mkios', tempCtrl: _f3MkiosTempCtrl, humCtrl: _f3MkiosHumCtrl), RoomTempItem(name: 'R. Ocs', tempCtrl: _f3OcsTempCtrl, humCtrl: _f3OcsHumCtrl)]),
@@ -1926,8 +1926,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Widget _buildTab4() {
     return ListView(
       // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
-      // ignore: deprecated_member_use
-      cacheExtent: 2500,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(2500),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         RoomTempCard(title: 'Suhu Ruang Perangkat Floor #4', rooms: [RoomTempItem(name: 'R. Battery', tempCtrl: _f4BattTempCtrl, humCtrl: _f4BattHumCtrl), RoomTempItem(name: 'R. Rectifier', tempCtrl: _f4RectiTempCtrl, humCtrl: _f4RectiHumCtrl), RoomTempItem(name: 'R. BSC RNC', tempCtrl: _f4BscRncTempCtrl, humCtrl: _f4BscRncHumCtrl), RoomTempItem(name: 'R. Interkoneksi', tempCtrl: _f4InterTempCtrl, humCtrl: _f4InterHumCtrl), RoomTempItem(name: 'R. Transmisi', tempCtrl: _f4TransTempCtrl, humCtrl: _f4TransHumCtrl)]),
@@ -1939,8 +1938,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Widget _buildTab5() {
     return ListView(
       // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
-      // ignore: deprecated_member_use
-      cacheExtent: 2500,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(2500),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         RoomTempCard(title: 'Suhu Ruang Perangkat Floor #5', rooms: [RoomTempItem(name: 'R. Utility A', tempCtrl: _f5UtilATempCtrl, humCtrl: _f5UtilAHumCtrl), RoomTempItem(name: 'R. Utility B', tempCtrl: _f5UtilBTempCtrl, humCtrl: _f5UtilBHumCtrl), RoomTempItem(name: 'R. Data Center', tempCtrl: _f5DcTempCtrl, humCtrl: _f5DcHumCtrl)]),
@@ -2025,8 +2023,7 @@ class _TtcSudiangPageState extends State<TtcSudiangPage> {
   Widget _buildTabReport() {
     return ListView(
       // cacheExtent besar: semua kolom tab terbangun sehingga "Next" selalu menemukan kolom berikutnya.
-      // ignore: deprecated_member_use
-      cacheExtent: 2500,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(2500),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
         if (_pendingSubmission != null)

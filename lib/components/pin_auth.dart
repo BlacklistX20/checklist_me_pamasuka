@@ -6,8 +6,10 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:forui/forui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_dialog.dart';
 import 'apps_script_client.dart';
 
 enum PinServerStatus { ok, wrong, locked }
@@ -110,17 +112,24 @@ class PinAuth {
   }
 }
 
-/// Dialog PIN 4 digit. [verify] mengembalikan null jika PIN benar, selain itu pesan error.
+/// Dialog PIN 4 digit (Forui). [verify] mengembalikan null jika PIN benar, selain itu pesan error.
+/// Tampilkan dengan showFDialog:
+///   showFDialog<bool>(context: context, builder: (context, style, animation) =>
+///       PinDialog(style: style, animation: animation, verify: ...));
 class PinDialog extends StatefulWidget {
   final Future<String?> Function(String pin) verify;
   final String title;
   final String description;
+  final FDialogStyleDelta style;
+  final Animation<double>? animation;
 
   const PinDialog({
     super.key,
     required this.verify,
     this.title = 'Masukkan PIN',
     this.description = 'Otorisasi diperlukan untuk masuk ke form site ini.',
+    this.style = const FDialogStyleDelta.context(),
+    this.animation,
   });
 
   @override
@@ -128,8 +137,6 @@ class PinDialog extends StatefulWidget {
 }
 
 class _PinDialogState extends State<PinDialog> {
-  static const Color _primaryRed = Color(0xFFE71E26);
-
   final _controller = TextEditingController();
   String _error = '';
   bool _busy = false;
@@ -166,49 +173,47 @@ class _PinDialogState extends State<PinDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-      content: Column(
+    return AppDialog(
+      style: widget.style,
+      animation: widget.animation,
+      title: Text(widget.title),
+      body: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.description, style: const TextStyle(fontSize: 12.5)),
+          Text(widget.description),
           const SizedBox(height: 14),
-          TextField(
-            controller: _controller,
+          FTextField(
+            control: FTextFieldControl.managed(
+              controller: _controller,
+              onChange: (_) {
+                if (_error.isNotEmpty) setState(() => _error = '');
+              },
+            ),
+            hint: 'PIN 4 digit',
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            // Batas 4 digit lewat formatter (tanpa penghitung "0/4").
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
             obscureText: true,
-            maxLength: 4,
             autofocus: true,
             enabled: !_busy,
             textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              hintText: 'PIN 4 digit',
-              counterText: '',
-              errorText: _error.isNotEmpty ? _error : null,
-              errorMaxLines: 3,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              isDense: true,
-            ),
-            onChanged: (_) {
-              if (_error.isNotEmpty) setState(() => _error = '');
-            },
+            onSubmit: (_) => _submit(),
+            error: _error.isNotEmpty ? Text(_error) : null,
           ),
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Batal'),
-        ),
-        ElevatedButton(
-          onPressed: _busy ? null : _submit,
-          style: ElevatedButton.styleFrom(backgroundColor: _primaryRed),
+        FButton(
+          onPress: _busy ? null : _submit,
           child: _busy
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Text('Masuk', style: TextStyle(color: Colors.white)),
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Masuk'),
+        ),
+        FButton(
+          variant: FButtonVariant.outline,
+          onPress: _busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Batal'),
         ),
       ],
     );
