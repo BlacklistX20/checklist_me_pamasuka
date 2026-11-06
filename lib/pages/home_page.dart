@@ -9,10 +9,10 @@ import 'package:crypto/crypto.dart'; // Library untuk Hash SHA-256
 import '../components/app_notifier.dart';
 import '../components/apps_script_client.dart';
 import '../components/pin_auth.dart';
+import '../models/region_catalog.dart';
+import 'site_selection_page.dart';
+import 'site_placeholder_page.dart';
 import 'ttc_sudiang_page.dart';
-import 'ttc_pengayoman_page.dart';
-import 'ttc_paniki_page.dart';
-import 'ttc_telling_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -24,6 +24,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const Color primaryRed = Color(0xFFE71E26);
   bool _isSyncing = false;
+  bool _isOpeningSite = false;
 
   @override
   void initState() {
@@ -38,6 +39,7 @@ class _HomePageState extends State<HomePage> {
 
   // Mengambil Teknisi, Template (dan PIN mode lama) dari Spreadsheet
   Future<void> _fetchConfigFromServer({bool showFeedback = false}) async {
+    if (_isSyncing) return;
     final scriptUrl = dotenv.env['SCRIPT_URL'];
     if (scriptUrl == null || scriptUrl.isEmpty) {
       if (showFeedback) AppNotifier.error('SCRIPT_URL belum diatur di file .env.');
@@ -191,7 +193,30 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Widget _buildSiteButton({required BuildContext context, required String title, required String subtitle, required VoidCallback onTap}) {
+  Future<void> _openSite(SiteLocation site) async {
+    if (_isOpeningSite) return;
+    _isOpeningSite = true;
+    try {
+      final Widget page = site.id == 'sudiang'
+          ? const TtcSudiangPage()
+          : SitePlaceholderPage(siteName: site.name);
+      final pinKey = site.pinKey;
+      if (pinKey == null) {
+        // Lokasi baru masih berupa placeholder, tanpa data atau fungsi pengiriman.
+        if (mounted) _navigateTo(context, page);
+      } else {
+        await _showPinDialog(pinKey, page);
+      }
+    } finally {
+      _isOpeningSite = false;
+    }
+  }
+
+  void _openRegion(RegionLocation region) {
+    _navigateTo(context, SiteSelectionPage(region: region, onSiteSelected: _openSite));
+  }
+
+  Widget _buildRegionButton({required String title, required String subtitle, required VoidCallback onTap}) {
     // Kartu putih berbingkai seperti sebelumnya; FItem (Forui) menangani isi, sentuhan, dan fokus.
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -206,11 +231,11 @@ class _HomePageState extends State<HomePage> {
         prefix: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(color: const Color(0xFFFFF1F2), borderRadius: BorderRadius.circular(10)),
-          child: const Icon(FLucideIcons.building2, color: _HomePageState.primaryRed, size: 22),
+          child: const Icon(Icons.public, color: _HomePageState.primaryRed, size: 22),
         ),
         title: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
         subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-        suffix: const Icon(FLucideIcons.lock, color: _HomePageState.primaryRed, size: 16),
+        suffix: const Icon(Icons.chevron_right_rounded, color: _HomePageState.primaryRed, size: 22),
         onPress: onTap,
       ),
     );
@@ -260,13 +285,15 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text('PILIH LOKASI SITE TTC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: Color(0xFF6B7280))),
+          const Text('PILIH REGION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: Color(0xFF6B7280))),
           const SizedBox(height: 12),
 
-          _buildSiteButton(context: context, title: 'TTC Sudiang', subtitle: 'Makassar, Sulawesi Selatan', onTap: () => _showPinDialog('PIN_SUDIANG', const TtcSudiangPage())),
-          _buildSiteButton(context: context, title: 'TTC Pengayoman', subtitle: 'Makassar, Sulawesi Selatan', onTap: () => _showPinDialog('PIN_PENGAYOMAN', const TtcPengayomanPage())),
-          _buildSiteButton(context: context, title: 'TTC Paniki', subtitle: 'Manado, Sulawesi Utara', onTap: () => _showPinDialog('PIN_PANIKI', const TtcPanikiPage())),
-          _buildSiteButton(context: context, title: 'TTC Telling', subtitle: 'Telling, Sulawesi Tengah', onTap: () => _showPinDialog('PIN_PALU', const TtcTellingPage())),
+          for (final region in RegionCatalog.regions)
+            _buildRegionButton(
+              title: region.name,
+              subtitle: '${region.sites.length} lokasi TTC',
+              onTap: () => _openRegion(region),
+            ),
         ],
       ),
     );
