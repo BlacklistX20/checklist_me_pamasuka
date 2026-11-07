@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:crypto/crypto.dart'; // Library untuk Hash SHA-256
+import 'package:crypto/crypto.dart';
 
 import '../components/app_notifier.dart';
-import '../components/apps_script_client.dart';
+import '../components/app_config_repository.dart';
 import '../components/pin_auth.dart';
 import '../models/region_catalog.dart';
 import 'site_selection_page.dart';
@@ -16,204 +16,198 @@ import 'ttc_sudiang_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   static const Color primaryRed = Color(0xFFE71E26);
+  final _repository = AppConfigRepository();
+  final _configuration = ValueNotifier<AppConfiguration?>(null);
+  bool _initializing = true;
   bool _isSyncing = false;
   bool _isOpeningSite = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchConfigFromServer(); // Otomatis sync data config saat aplikasi dibuka
-  }
+  String? _configMessage;
 
   static const int _maxPinAttempts = 5;
   static const Duration _pinLockDuration = Duration(seconds: 60);
   final Map<String, int> _pinFailures = {};
   final Map<String, DateTime> _pinLockedUntil = {};
 
-  // Mengambil Teknisi, Template (dan PIN mode lama) dari Spreadsheet
-  Future<void> _fetchConfigFromServer({bool showFeedback = false}) async {
-    if (_isSyncing) return;
-    final scriptUrl = dotenv.env['SCRIPT_URL'];
-    if (scriptUrl == null || scriptUrl.isEmpty) {
-      if (showFeedback) AppNotifier.error('SCRIPT_URL belum diatur di file .env.');
-      return;
-    }
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_initialize());
+  }
 
-    setState(() => _isSyncing = true);
-    String feedback = '';
-    bool ok = false;
+  Future<void> _initialize() async {
+    // Berurutan: cache tidak boleh menimpa hasil sync yang lebih baru.
     try {
-      final response = await AppsScriptClient.get("$scriptUrl?action=getConfig");
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        if (result['status'] == 'success') {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('app_config', jsonEncode(result['data']));
-          ok = true;
-          feedback = 'Config berhasil disinkronkan.';
-        } else {
-          feedback = (result['message'] as String?) ?? 'Server menolak permintaan config.';
-        }
-      } else {
-        feedback = 'Gagal sync (HTTP ${response.statusCode}). Memakai config tersimpan.';
-      }
+      final cached = await _repository.load();
+      if (!mounted) return;
+      _configuration.value = cached;
     } catch (_) {
-      // Offline/timeout: aplikasi tetap memakai cache lama.
-      feedback = 'Tidak bisa terhubung ke server. Memakai config tersimpan.';
+      _configMessage = 'Konfigurasi tersimpan belum dapat digunakan. Hubungkan internet untuk sinkronisasi.';
+    }
+    if (!mounted) return;
+    setState(() => _initializing = false);
+    await _fetchConfigFromServer();
+  }
+
+  @override
+  void dispose() {
+    _configuration.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchConfigFromServer({bool showFeedback = false}) async {
+    if (_initializing || _isSyncing || !mounted) return;
+    setState(() => _isSyncing = true);
+    try {
+      final url = dotenv.isInitialized ? (dotenv.env['SCRIPT_URL'] ?? '') : '';
+      final config = await _repository.sync(url);
+      if (!mounted) return;
+      _configuration.value = config;
+      setState(() => _configMessage = null);
+      if (showFeedback) AppNotifier.success('Region, site, dan konfigurasi PIN berhasil disinkronkan.');
+    } catch (error) {
+      if (!mounted) return;
+      final reason = error is FormatException
+          ? error.message
+          : 'Tidak dapat menyinkronkan konfigurasi. Periksa koneksi internet dan coba lagi.';
+      final message = _configuration.value == null
+          ? '$reason Belum ada konfigurasi valid di perangkat.'
+          : '$reason Menggunakan konfigurasi tersimpan.';
+      setState(() => _configMessage = message);
+      if (showFeedback) AppNotifier.error(message);
     } finally {
       if (mounted) setState(() => _isSyncing = false);
     }
+  }
 
-    if (showFeedback) {
-      if (ok) {
-        AppNotifier.success(feedback);
-      } else {
-        AppNotifier.error(feedback);
-      }
+  Future<void> _tryObtainToken(SharedPreferences prefs, String key, String pin) async {
+    try {
+      final result = await PinAuth.verifyOnServer(prefs, key, pin);
+      if (result?.status == PinServerStatus.ok) await PinAuth.saveLocal(prefs, key, pin);
+    } catch (_) {
+      // Login mode hash lokal sudah berhasil. Pengiriman dapat meminta verifikasi ulang.
     }
   }
 
-  void _navigateTo(BuildContext context, Widget page) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (context) => page));
-  }
-
-  // --- PIN ---
-  // Mode server: jika config berisi SERVER_PIN_CHECK=true, PIN diverifikasi di server dan hash PIN
-  // tidak lagi dikirim ke aplikasi. Setelah berhasil online, perangkat menyimpan token perangkat
-  // (untuk kirim laporan) dan hash ber-salt lokal (agar PIN tetap bisa dipakai OFFLINE).
-  // Internet hanya dibutuhkan sekali per perangkat per site.
-  // Mode lama: tanpa flag tersebut, PIN dicocokkan dengan hash dari config (perilaku sebelumnya).
-
-  /// Masa transisi (mode lama): ambil token perangkat diam-diam tanpa menunda login.
-  Future<void> _tryObtainToken(SharedPreferences prefs, String envKey, String pin) async {
-    final result = await PinAuth.verifyOnServer(prefs, envKey, pin);
-    if (result != null && result.status == PinServerStatus.ok) {
-      await PinAuth.saveLocal(prefs, envKey, pin);
-    }
-  }
-
-  /// Mengembalikan null jika PIN benar, atau pesan error untuk ditampilkan di dialog.
   Future<String?> _verifyPin({
     required SharedPreferences prefs,
     required String envKey,
     required String pin,
-    required bool serverCheck,
-    required String legacyHash,
+    required AppConfiguration config,
   }) async {
-    final lockedUntil = _pinLockedUntil[envKey];
-    if (lockedUntil != null && DateTime.now().isBefore(lockedUntil)) {
-      final sisa = lockedUntil.difference(DateTime.now()).inSeconds + 1;
-      return 'Terlalu banyak percobaan. Coba lagi dalam $sisa detik.';
+    final until = _pinLockedUntil[envKey];
+    if (until != null && DateTime.now().isBefore(until)) {
+      return 'Terlalu banyak percobaan. Coba lagi dalam ${until.difference(DateTime.now()).inSeconds + 1} detik.';
     }
-
     bool accepted;
-    if (serverCheck) {
+    if (config.needsServerVerification(envKey)) {
       final server = await PinAuth.verifyOnServer(prefs, envKey, pin);
-      if (server != null && server.status == PinServerStatus.ok) {
+      if (server?.status == PinServerStatus.ok) {
         await PinAuth.saveLocal(prefs, envKey, pin);
         _pinFailures.remove(envKey);
+        _pinLockedUntil.remove(envKey);
         return null;
       }
-      if (server != null && server.status == PinServerStatus.locked) {
-        return server.message ?? 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.';
+      if (server?.status == PinServerStatus.locked ||
+          server?.status == PinServerStatus.notConfigured ||
+          server?.status == PinServerStatus.error) {
+        return server!.message ?? 'PIN site belum dapat diverifikasi. Hubungi admin.';
       }
       if (server != null) {
-        accepted = false; // PIN salah menurut server
+        accepted = false;
       } else {
-        // Server tidak terjangkau: pakai hash lokal bila perangkat ini pernah verifikasi online.
+        // Hash kosong pada mode lama tidak boleh menggunakan cache PIN yang lebih lama.
+        if (!config.serverPinCheck) {
+          return 'Hubungkan internet untuk verifikasi PIN site ini. Jika PIN belum diatur, hubungi admin.';
+        }
         if (!PinAuth.hasLocal(prefs, envKey)) {
-          return 'Tidak dapat memverifikasi PIN. Hubungkan internet untuk verifikasi pertama kali di perangkat ini.';
+          return 'Hubungkan internet untuk verifikasi PIN pertama kali di perangkat ini.';
         }
         accepted = PinAuth.matchLocal(prefs, envKey, pin);
       }
     } else {
-      accepted = sha256.convert(utf8.encode(pin)).toString() == legacyHash;
+      accepted = sha256.convert(utf8.encode(pin)).toString() == config.hashFor(envKey);
       if (accepted) unawaited(_tryObtainToken(prefs, envKey, pin));
     }
-
     if (accepted) {
       _pinFailures.remove(envKey);
+      _pinLockedUntil.remove(envKey);
       return null;
     }
-
     final failures = (_pinFailures[envKey] ?? 0) + 1;
     if (failures >= _maxPinAttempts) {
       _pinFailures.remove(envKey);
       _pinLockedUntil[envKey] = DateTime.now().add(_pinLockDuration);
-      return 'PIN salah! Terlalu banyak percobaan, tunggu ${_pinLockDuration.inSeconds} detik.';
+      return 'PIN salah! Tunggu ${_pinLockDuration.inSeconds} detik sebelum mencoba lagi.';
     }
     _pinFailures[envKey] = failures;
     return 'PIN salah! Sisa percobaan: ${_maxPinAttempts - failures}.';
   }
 
-  Future<void> _showPinDialog(String envKey, Widget page) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    final configStr = prefs.getString('app_config');
-
-    if (configStr == null) {
-      AppNotifier.error('Sistem belum terkonfigurasi. Pastikan ada internet saat pertama kali buka aplikasi.');
-      return;
-    }
-
-    Map<String, dynamic> config;
-    try {
-      config = Map<String, dynamic>.from(jsonDecode(configStr) as Map);
-    } catch (_) {
-      AppNotifier.error('Config tersimpan rusak. Tekan Sync Config saat online.');
-      return;
-    }
-
-    final serverCheck = config['SERVER_PIN_CHECK']?.toString().toLowerCase() == 'true';
-    final legacyHash = (config[envKey] ?? '').toString().trim();
-
-    if (!serverCheck && legacyHash.isEmpty) {
-      AppNotifier.error('Akses ditolak: PIN site belum dikonfigurasi di Server.');
-      return;
-    }
-
-    final verified = await showFDialog<bool>(
-      context: context,
-      builder: (context, style, animation) => PinDialog(
-        style: style,
-        animation: animation,
-        verify: (pin) => _verifyPin(prefs: prefs, envKey: envKey, pin: pin, serverCheck: serverCheck, legacyHash: legacyHash),
-      ),
-    );
-
-    if (verified == true && mounted) {
-      _navigateTo(context, page);
-    }
-  }
-
-  Future<void> _openSite(SiteLocation site) async {
-    if (_isOpeningSite) return;
+  Future<void> _openSite(BuildContext pageContext, String regionId, String siteId) async {
+    if (_isOpeningSite || !mounted || !pageContext.mounted) return;
     _isOpeningSite = true;
     try {
+      final config = _configuration.value;
+      final site = config?.catalog.regionById(regionId)?.siteById(siteId);
+      if (config == null || site == null) {
+        AppNotifier.error('Lokasi sudah tidak tersedia. Silakan pilih kembali.');
+        return;
+      }
+      final pinKey = site.pinKey;
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted || !pageContext.mounted || ModalRoute.of(pageContext)?.isCurrent != true) return;
+      if (!identical(config, _configuration.value)) {
+        AppNotifier.info('Konfigurasi baru sudah dimuat. Pilih lokasi kembali.');
+        return;
+      }
+      final verified = await showFDialog<bool>(
+        context: pageContext,
+        builder: (context, style, animation) => PinDialog(
+          style: style,
+          animation: animation,
+          title: 'PIN ${site.name}',
+          verify: (pin) async {
+            if (!mounted || !identical(config, _configuration.value)) {
+              return 'Konfigurasi berubah. Tutup dialog dan pilih lokasi kembali.';
+            }
+            final error = await _verifyPin(prefs: prefs, envKey: pinKey, pin: pin, config: config);
+            if (!mounted || !identical(config, _configuration.value)) {
+              return 'Konfigurasi berubah. Tutup dialog dan pilih lokasi kembali.';
+            }
+            return error;
+          },
+        ),
+      );
+      if (verified != true || !mounted || !pageContext.mounted ||
+          !identical(config, _configuration.value) || ModalRoute.of(pageContext)?.isCurrent != true) {
+        return;
+      }
+      // Hanya ID tetap sudiang yang membuka form lengkap dengan tujuan pengiriman Sudiang.
       final Widget page = site.id == 'sudiang'
           ? const TtcSudiangPage()
           : SitePlaceholderPage(siteName: site.name);
-      final pinKey = site.pinKey;
-      if (pinKey == null) {
-        // Lokasi baru masih berupa placeholder, tanpa data atau fungsi pengiriman.
-        if (mounted) _navigateTo(context, page);
-      } else {
-        await _showPinDialog(pinKey, page);
-      }
+      await Navigator.of(pageContext).push(MaterialPageRoute<void>(builder: (_) => page));
+    } catch (_) {
+      AppNotifier.error('Gagal membuka lokasi. Silakan coba lagi.');
     } finally {
       _isOpeningSite = false;
     }
   }
 
   void _openRegion(RegionLocation region) {
-    _navigateTo(context, SiteSelectionPage(region: region, onSiteSelected: _openSite));
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SiteSelectionPage(
+        regionId: region.id,
+        configuration: _configuration,
+        onSiteSelected: _openSite,
+      ),
+    ));
   }
 
   Widget _buildRegionButton({required String title, required String subtitle, required VoidCallback onTap}) {
@@ -252,9 +246,9 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: primaryRed,
         actions: [
           // Indikator Sinkronisasi
-          if (_isSyncing)
+          if (_isSyncing || _initializing)
             const Padding(padding: EdgeInsets.only(right: 16.0), child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))),
-          if (!_isSyncing)
+          if (!_isSyncing && !_initializing)
             IconButton(icon: const Icon(FLucideIcons.refreshCw, size: 20), onPressed: () => _fetchConfigFromServer(showFeedback: true), tooltip: 'Sync Config'),
         ],
       ),
@@ -288,7 +282,25 @@ class _HomePageState extends State<HomePage> {
           const Text('PILIH REGION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: Color(0xFF6B7280))),
           const SizedBox(height: 12),
 
-          for (final region in RegionCatalog.regions)
+          if (_configMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(_configMessage!, style: TextStyle(fontSize: 12, color: Colors.orange.shade900)),
+            ),
+          if (_configuration.value == null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                _initializing || _isSyncing ? 'Memuat daftar region...' : 'Tekan Sync Config untuk memuat daftar region.',
+                textAlign: TextAlign.center,
+              ),
+            )
+          else if (_configuration.value!.catalog.regions.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text('Belum ada region yang terdaftar.', textAlign: TextAlign.center),
+            ),
+          for (final region in _configuration.value?.catalog.regions ?? const <RegionLocation>[])
             _buildRegionButton(
               title: region.name,
               subtitle: '${region.sites.length} lokasi TTC',

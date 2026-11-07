@@ -12,7 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_dialog.dart';
 import 'apps_script_client.dart';
 
-enum PinServerStatus { ok, wrong, locked }
+enum PinServerStatus { ok, wrong, locked, notConfigured, error }
 
 class PinServerResult {
   final PinServerStatus status;
@@ -76,7 +76,8 @@ class PinAuth {
   }
 
   /// Verifikasi PIN ke server. Mengembalikan null jika server tidak bisa dipakai
-  /// (offline, timeout, atau script lama) sehingga pemanggil boleh memakai hash lokal.
+  /// (offline, timeout, atau respons tidak terbaca) sehingga pemanggil boleh memakai hash lokal.
+  /// Respons penolakan server diteruskan; tidak dialihkan ke verifikasi offline.
   /// Jika berhasil dan server menerbitkan token baru, token disimpan otomatis.
   static Future<PinServerResult?> verifyOnServer(SharedPreferences prefs, String envKey, String pin) async {
     final scriptUrl = dotenv.env['SCRIPT_URL'];
@@ -103,9 +104,22 @@ class PinAuth {
       }
 
       final code = result['code'];
+      final message = result['message'] is String ? result['message'] as String : null;
       if (code == 'wrong_pin') return const PinServerResult(PinServerStatus.wrong);
-      if (code == 'locked') return PinServerResult(PinServerStatus.locked, result['message'] as String?);
-      return null;
+      if (code == 'locked') {
+        return PinServerResult(PinServerStatus.locked, message ?? 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.');
+      }
+      if (code == 'not_configured') {
+        // Respons eksplisit server tidak boleh dianggap offline dan memakai PIN lama.
+        try {
+          await prefs.remove(_localKey(envKey));
+          await prefs.remove(_tokenKey(envKey));
+        } catch (_) {
+          // Penolakan server tetap berlaku meski pembersihan cache gagal.
+        }
+        return const PinServerResult(PinServerStatus.notConfigured, 'PIN site belum dikonfigurasi. Hubungi admin.');
+      }
+      return PinServerResult(PinServerStatus.error, message ?? 'Server belum dapat memverifikasi PIN. Coba lagi.');
     } catch (_) {
       return null;
     }
@@ -114,8 +128,10 @@ class PinAuth {
 
 /// Dialog PIN 4 digit (Forui). [verify] mengembalikan null jika PIN benar, selain itu pesan error.
 /// Tampilkan dengan showFDialog:
+/// ```dart
 ///   showFDialog<bool>(context: context, builder: (context, style, animation) =>
 ///       PinDialog(style: style, animation: animation, verify: ...));
+/// ```
 class PinDialog extends StatefulWidget {
   final Future<String?> Function(String pin) verify;
   final String title;
@@ -158,7 +174,12 @@ class _PinDialogState extends State<PinDialog> {
       _busy = true;
       _error = '';
     });
-    final error = await widget.verify(pin);
+    String? error;
+    try {
+      error = await widget.verify(pin);
+    } catch (_) {
+      error = 'Verifikasi PIN gagal. Silakan coba lagi.';
+    }
     if (!mounted) return;
     if (error == null) {
       Navigator.of(context).pop(true);
@@ -167,7 +188,7 @@ class _PinDialogState extends State<PinDialog> {
     _controller.clear();
     setState(() {
       _busy = false;
-      _error = error;
+      _error = error ?? '';
     });
   }
 
