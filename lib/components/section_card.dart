@@ -1,28 +1,27 @@
 import 'package:flutter/material.dart';
 
-/// Kartu putih berbingkai yang dipakai semua seksi form (sebelumnya dekorasi yang sama
-/// disalin di tujuh tempat). Ubah tampilan kartu cukup di sini.
 class SectionCard extends StatelessWidget {
   final Widget child;
+  final String? title;
   final EdgeInsetsGeometry margin;
-
-  const SectionCard({
-    super.key,
-    required this.child,
-    this.margin = const EdgeInsets.only(bottom: 14),
-  });
+  const SectionCard({super.key, required this.child, this.title,
+    this.margin = const EdgeInsets.only(bottom: 14)});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: margin,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+  Widget build(BuildContext context) => Container(
+    margin: margin,
+    clipBehavior: Clip.antiAlias,
+    decoration: BoxDecoration(color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFF0C8CB))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (title != null) Container(
+        color: const Color(0xFFFCE6E8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        child: Text(title!, style: const TextStyle(color: Color(0xFF9B1821),
+          fontWeight: FontWeight.w700, fontSize: 14)),
       ),
-      child: child,
-    );
-  }
+      Padding(padding: const EdgeInsets.all(12), child: child),
+    ]),
+  );
 }

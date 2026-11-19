@@ -32,7 +32,7 @@ class RegionCatalog {
       throw const FormatException('REGION_CONFIG harus memakai schemaVersion 1 dan daftar regions.');
     }
     final regionIds = <String>{}, regionNames = <String>{};
-    final siteIds = <String>{}, siteNames = <String>{}, pinKeys = <String>{};
+    final siteIds = <String>{}, siteNames = <String>{};
     final regions = <RegionLocation>[];
     for (final rawRegion in data['regions'] as List) {
       final region = configObject(rawRegion, 'Region');
@@ -51,25 +51,10 @@ class RegionCatalog {
         if (!siteIds.add(siteId) || !siteNames.add(canonicalName)) {
           throw const FormatException('ID atau nama site ganda antar-region.');
         }
-        final rawKey = site['pinKey'];
-        // JSON/cache versi awal berisi null untuk Papua dan Kalimantan.
-        // Samakan aturan dengan pinKeyForEntry_ di Apps Script; null bukan akses bebas.
-        final String pinKey;
-        if (rawKey == null) {
-          pinKey = canonicalName == 'ttc telling'
-              ? 'PIN_PALU'
-              : 'PIN_${siteId.toUpperCase().replaceAll('-', '_')}';
-        } else {
-          if (rawKey is! String || !RegExp(r'^PIN_[A-Z0-9_]+$').hasMatch(rawKey)) {
-            throw const FormatException('pinKey harus berupa PIN_NAMA_SITE.');
-          }
-          pinKey = rawKey;
+        if (site['pinKey'] != null && site['pinKey'] != siteId) {
+          throw FormatException('pinKey $siteName harus sama dengan ID site.');
         }
-        if (!pinKeys.add(pinKey)) throw const FormatException('pinKey digunakan oleh beberapa site.');
-        // Form Sudiang masih memakai kunci dan tujuan pengiriman tetap.
-        if (siteId == 'sudiang' && pinKey != 'PIN_SUDIANG') {
-          throw const FormatException('Site sudiang harus memakai pinKey PIN_SUDIANG.');
-        }
+        final pinKey = siteId;
         sites.add(SiteLocation(id: siteId, name: siteName, pinKey: pinKey));
       }
       regions.add(RegionLocation(id: id, name: name, sites: List.unmodifiable(sites)));
@@ -108,11 +93,6 @@ class AppConfiguration {
         for (final entry in configObject(pins['pins'], 'PIN.pins').entries) {
           hashes[entry.key] = _hash(entry.key, entry.value);
         }
-      } else {
-        // Kode.gs saat ini memecah JSON PIN menjadi alias pada respons getConfig.
-        for (final entry in config.entries) {
-          if (entry.key.startsWith('PIN_')) hashes[entry.key] = _hash(entry.key, entry.value);
-        }
       }
     }
     for (final entry in config.entries) {
@@ -124,7 +104,16 @@ class AppConfiguration {
     normalized.remove('PIN');
     normalized.removeWhere((key, _) => key.startsWith('PIN_'));
     normalized['SERVER_PIN_CHECK'] = serverCheck;
-    if (!serverCheck) normalized.addAll(hashes);
+    if (!serverCheck) normalized['PIN'] = {'schemaVersion': 1, 'pins': hashes};
+    for (final entry in config.entries.where((e) => e.key.startsWith('SITE_'))) {
+      final form = configObject(entry.value, entry.key);
+      final regions = catalog.regions.where((r) => r.name == form['region']);
+      final site = regions.isEmpty ? null : regions.first.siteById(form['siteId']?.toString() ?? '');
+      if (site == null || site.name != form['siteName'] ||
+          (form['pinKey'] != null && form['pinKey'] != site.id)) {
+        throw FormatException('Identitas ${entry.key} berbeda dari REGION_CONFIG.');
+      }
+    }
     return AppConfiguration._(catalog, serverCheck, Map.unmodifiable(hashes), jsonEncode(normalized));
   }
 
@@ -152,8 +141,8 @@ String _text(Object? value, String label) {
 
 String _id(Object? value, String label) {
   final id = _text(value, label);
-  if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$').hasMatch(id)) {
-    throw FormatException('$label hanya boleh memakai huruf kecil, angka, _ dan -.');
+  if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_-]*$').hasMatch(id)) {
+    throw FormatException('$label hanya boleh memakai huruf, angka, _ dan -.');
   }
   return id;
 }
@@ -170,7 +159,7 @@ bool _flag(Object? raw, String key) {
 }
 
 String _hash(String key, Object? value) {
-  if (!RegExp(r'^PIN_[A-Z0-9_]+$').hasMatch(key) || value is! String) {
+  if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_-]*$').hasMatch(key) || value is! String) {
     throw const FormatException('Key atau hash PIN tidak valid.');
   }
   final hash = value.trim().toLowerCase();

@@ -189,7 +189,7 @@ class _HomePageState extends State<HomePage> {
         return;
       }
       // Hanya ID tetap sudiang yang membuka form lengkap dengan tujuan pengiriman Sudiang.
-      final Widget page = site.id == 'sudiang'
+      final Widget page = site.id == 'UPD-178'
           ? const TtcSudiangPage()
           : SitePlaceholderPage(siteName: site.name);
       await Navigator.of(pageContext).push(MaterialPageRoute<void>(builder: (_) => page));
