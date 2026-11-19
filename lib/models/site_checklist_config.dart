@@ -75,10 +75,15 @@ class SiteChecklistConfig {
     check(power['pln'] is List && pln.isNotEmpty, 'Minimal satu PLN diperlukan.');
     final floors = <String>{};
     for (final f in items('floors')) {
-      check(f['id'] is String && floors.add(f['id'] as String), 'ID lantai kosong/ganda.');
+      check(f['id'] is String && (f['id'] as String).trim().isNotEmpty && floors.add(f['id'] as String), 'ID lantai kosong/ganda.');
       check(f['name'] is String && (f['name'] as String).isNotEmpty, 'Nama lantai wajib diisi.');
     }
-    check(floors.contains(power['floor']), 'Lantai power tidak ditemukan.');
+    void checkFloor(Map<String, dynamic> item, String label, {bool room = false}) {
+      final floor = item['floor'];
+      if (floor == null && mode == 'category' && !room) return;
+      check(floors.contains(floor), 'floor $label harus merujuk ke ID dalam floors.');
+    }
+    checkFloor(power, 'power');
     void positiveOrNull(dynamic n, String name) {
       check(n == null || (n is num && n.isFinite && n > 0), '$name harus positif atau null.');
     }
@@ -87,10 +92,13 @@ class SiteChecklistConfig {
     for (final key in ['gensets', 'tanks', 'rectifiers', 'ups', 'rooms']) {
       for (final item in items(key)) {
         check(item['id'] is String && RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(item['id'] as String) && ids.add(item['id'] as String), 'ID perangkat harus unik, huruf/angka/_/-.');
-        check(floors.contains(item['floor']), 'Lantai ${item['id']} tidak ditemukan.');
+        checkFloor(item, item['id'] as String, room: key == 'rooms');
         if (key != 'tanks') {
           check(item['name'] is String && (item['name'] as String).trim().isNotEmpty, 'Nama ${item['id']} wajib diisi.');
-          if (key != 'ups' && key != 'rectifiers') { check(item['sheetPrefix'] is String && (item['sheetPrefix'] as String).trim().isNotEmpty, 'sheetPrefix ${item['id']} wajib diisi.'); }
+          if (key == 'gensets' || (key == 'rooms' && item['sheetPrefix'] != null)) {
+            check(item['sheetPrefix'] is String && (item['sheetPrefix'] as String).trim().isNotEmpty,
+                'sheetPrefix ${item['id']} harus berupa teks yang tidak kosong.');
+          }
         }
         if (key == 'gensets' || key == 'ups') {
           check(item['capacityKva'] is num && (item['capacityKva'] as num) > 0, 'capacityKva ${item['id']} harus positif.');
@@ -101,7 +109,10 @@ class SiteChecklistConfig {
             check(item[n] is num && (item[n] as num).isFinite && (item[n] as num) > 0, '$n tangki harus positif.');
           }
           check((item['maxHeightCm'] as num) <= (item['diameterCm'] as num), 'maxHeightCm melebihi diameter.');
-          check(item['sheetColumn'] is String && (item['sheetColumn'] as String).trim().isNotEmpty, 'sheetColumn tangki wajib diisi.');
+          if (item['sheetColumn'] != null) {
+            check(item['sheetColumn'] is String && (item['sheetColumn'] as String).trim().isNotEmpty,
+                'sheetColumn ${item['id']} harus berupa teks yang tidak kosong.');
+          }
         }
       }
     }
@@ -154,7 +165,9 @@ class SiteChecklistConfig {
     void add(String id, String title, String floor, String category, List<List<ChecklistFieldSpec>> rows, {List<String> photos = const [], Map<String, dynamic>? tank}) {
       result.add(ChecklistCardSpec(id, title, floor, category, rows, photos, tank));
     }
-    final pf = power['floor'] as String;
+    // Kartu kategori tanpa lantai tidak pernah dikelompokkan melalui nilai ini.
+    String cardFloor(Map<String, dynamic> item) => item['floor'] as String? ?? '';
+    final pf = cardFloor(power);
     final powerRows = <List<ChecklistFieldSpec>>[
       [d('statusPln', 'Status PLN', 'Status PLN', ['ON', 'OFF'], legacy: 'statusPln'),
        n('trafo', 'Capacity Trafo', 'kVA', 'Capacity Trafo', fixed: power['transformerKva'], readOnly: true)],
@@ -189,7 +202,7 @@ class SiteChecklistConfig {
     }
     for (final g in items('gensets')) {
       final id = g['id'] as String; final prefix = g['sheetPrefix']; final index = g['legacyIndex'];
-      add(id, 'Update Genset — ${g['name']}', g['floor'] as String, 'Main Power', [
+      add(id, 'Update Genset — ${g['name']}', cardFloor(g), 'Main Power', [
         [d('$id.status', 'Status', 'Status $prefix', ['Standby Auto', 'ON', 'OFF', 'MANUAL'], legacy: index == null ? null : 'genset${index}Mode'), n('$id.capacity', 'Kapasitas', 'kVA', 'Kap $prefix', readOnly: true, fixed: g['capacityKva'])],
         [n('$id.smu', 'SMU Hour', 'H', 'SMU $prefix', legacy: index == null ? null : 'smuGenset$index'), n('$id.minutes', 'SMU Minute', 'M', 'SMU Menit $prefix', max: 59, allowZero: true)],
         [n('$id.temp', 'Suhu', '°C', 'Suhu $prefix', legacy: index == null ? null : 'suhuGenset$index'), n('$id.volt', 'Tegangan Accu', 'V', 'Batt Volt $prefix', legacy: index == null ? null : 'voltGenset$index')],
@@ -198,22 +211,23 @@ class SiteChecklistConfig {
     final tanks = items('tanks');
     for (var i = 0; i < tanks.length; i++) {
       final t = tanks[i]; final id = t['id'] as String; final old = t['legacyPrefix'];
-      add(id, 'Update BBM — ${tankName(t, i)}', t['floor'] as String, 'Main Power', [[
-        n('$id.height', 'Tinggi', 'cm', '${t['sheetColumn']} Tinggi cm', max: (t['maxHeightCm'] as num).toDouble(), legacy: old == null ? null : '${old}Tinggi', allowZero: true, allowSame: true),
-        n('$id.liters', 'Volume', 'L', t['sheetColumn'] as String, max: (t['capacityLiters'] as num).toDouble(), legacy: old == null ? null : '${old}Liter', allowZero: true, allowSame: true),
+      final volumeKey = t['sheetColumn'] as String? ?? '$id.liters';
+      add(id, 'Update BBM — ${tankName(t, i)}', cardFloor(t), 'Main Power', [[
+        n('$id.height', 'Tinggi', 'cm', '$volumeKey Tinggi cm', max: (t['maxHeightCm'] as num).toDouble(), legacy: old == null ? null : '${old}Tinggi', allowZero: true, allowSame: true),
+        n('$id.liters', 'Volume', 'L', volumeKey, max: (t['capacityLiters'] as num).toDouble(), legacy: old == null ? null : '${old}Liter', allowZero: true, allowSame: true),
       ]], photos: photoIds(t), tank: t);
     }
     const statuses = ['OK', 'Alarm', 'On Service'];
     for (final r in items('rectifiers')) {
       final id = r['id'] as String; final s = 'Rect ${(items('rectifiers').indexWhere((x) => x['id'] == id) + 1).toString().padLeft(2, '0')}'; final old = r['legacyIndex'];
-      add(id, 'Update Rectifier — ${r['name']}', r['floor'] as String, 'Recti', [
+      add(id, 'Update Rectifier — ${r['name']}', cardFloor(r), 'Recti', [
         [d('$id.status', 'Status', '$s Status', statuses), n('$id.kw', 'Load', 'kW', '$s Load kW', legacy: old == null ? null : 'rects.$old.kw'), n('$id.amp', 'Arus', 'A', '$s Arus A')],
         [n('$id.volt', 'Tegangan', 'V', '$s Voltage', legacy: old == null ? null : 'rects.$old.volt'), n('$id.occ', 'Occupancy', '%', '$s Load %', max: 100, legacy: old == null ? null : 'rects.$old.occ')],
       ], photos: photoIds(r));
     }
     for (final u in items('ups')) {
       final id = u['id'] as String; final s = 'UPS ${(items('ups').indexWhere((x) => x['id'] == id) + 1).toString().padLeft(2, '0')}'; final old = u['legacyKey'];
-      add(id, 'Update UPS — ${u['name']}', u['floor'] as String, 'UPS', [
+      add(id, 'Update UPS — ${u['name']}', cardFloor(u), 'UPS', [
         [d('$id.status', 'Status', '$s Status', statuses), n('$id.volt', 'Battery Voltage', 'V', '$s Battery V', legacy: old == null ? null : '$old.volt'), n('$id.runtime', 'Runtime', 'min', '$s Runtime min', legacy: old == null ? null : '$old.runtime')],
         [n('$id.kw', 'Load', 'kW', '$s Load KW', legacy: old == null ? null : '$old.kw'), n('$id.kva', 'Load', 'kVA', '$s Load kVA'), n('$id.occ', 'Occupancy', '%', '$s Load %', max: 100, legacy: old == null ? null : '$old.occ')],
         [for (final ph in ['R','S','T']) n('$id.v$ph', 'Tegangan $ph', 'V', '$s Output $ph V')],
@@ -221,8 +235,8 @@ class SiteChecklistConfig {
       ], photos: photoIds(u));
     }
     for (final r in items('rooms')) {
-      final id = r['id'] as String; final s = r['sheetPrefix']; final old = r['legacyPrefix'];
-      add(id, 'Update Ruang Perangkat — ${r['name']}', r['floor'] as String, 'Ruang Perangkat', [
+      final id = r['id'] as String; final s = r['sheetPrefix'] as String? ?? id; final old = r['legacyPrefix'];
+      add(id, 'Update Ruang Perangkat — ${r['name']}', cardFloor(r), 'Ruang Perangkat', [
         [d('$id.vendor', 'Status Vendor', '$s Status Vendor', ['Ada','Tidak Ada']), d('$id.pac', 'Status PAC', '$s Status PAC', ['No PAC','Active-Standby','On Service','OFF','Broken'])],
         [n('$id.temp', 'Suhu', '°C', '$s Suhu', legacy: old == null ? null : '${old}Temp'), n('$id.hum', 'Humidity', '%', '$s Humidity', max: 100, legacy: old == null ? null : '${old}Hum')],
       ], photos: photoIds(r));

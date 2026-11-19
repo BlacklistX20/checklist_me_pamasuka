@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:forui/forui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
+import '../models/region_catalog.dart' show configObject;
 import '../models/site_checklist_config.dart';
 import '../components/app_config_repository.dart';
 import '../components/apps_script_client.dart';
@@ -19,18 +20,17 @@ import '../components/checklist_photos.dart';
 import '../components/checklist_report.dart';
 import '../components/photo_preview.dart';
 
-class TtcSudiangPage extends StatelessWidget {
-  const TtcSudiangPage({super.key});
-  @override
-  Widget build(BuildContext context) => const SiteChecklistPage(
-    configKey: 'SITE_SUDIANG', siteId: 'UPD-178', siteName: 'TTC Sudiang', pinKey: 'UPD-178');
-}
-
-/// Dapat dipakai halaman site lain dengan mengganti identitas/configKey.
+/// Form bersama untuk site yang sudah dipilih dan diverifikasi pada halaman utama.
 class SiteChecklistPage extends StatefulWidget {
-  final String configKey, siteId, siteName, pinKey;
-  const SiteChecklistPage({super.key, required this.configKey, required this.siteId,
-    required this.siteName, required this.pinKey});
+  final String siteId;
+  final String siteName;
+
+  const SiteChecklistPage({
+    super.key,
+    required this.siteId,
+    required this.siteName,
+  });
+
   @override
   State<SiteChecklistPage> createState() => _SiteChecklistPageState();
 }
@@ -67,23 +67,44 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
     if (state != AppLifecycleState.resumed) { _saveDraft(); }
   }
 
+  SiteChecklistConfig? _findForm(Map<String, dynamic> snapshot) {
+    Map<String, dynamic>? match;
+    String? matchedKey;
+    for (final entry in snapshot.entries) {
+      if (!entry.key.startsWith('SITE_')) continue;
+      final form = configObject(entry.value, entry.key);
+      if (form['siteId'] != widget.siteId) continue;
+      if (match != null) {
+        throw FormatException('Dua konfigurasi untuk ${widget.siteName}: $matchedKey dan ${entry.key}.');
+      }
+      matchedKey = entry.key;
+      match = form;
+    }
+    return match == null ? null : SiteChecklistConfig.parse(match);
+  }
+
   Future<void> _load({bool sync = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (sync || prefs.getString('app_config') == null) {
+      if (sync || prefs.getString(AppConfigRepository.cacheKey) == null) {
         await AppConfigRepository().sync(_url);
       }
-      final raw = prefs.getString('app_config');
+      final raw = prefs.getString(AppConfigRepository.cacheKey);
       if (raw == null) { throw StateError('Sinkronkan konfigurasi pada halaman utama.'); }
-      final data = SiteChecklistConfig.map(jsonDecode(raw));
-      if (data[widget.configKey] == null) {
-        throw FormatException('Tambahkan ${widget.configKey} pada tab Config, lalu tekan Coba lagi & sinkronkan.');
+      final data = configObject(raw, 'Config');
+      final config = _findForm(data);
+      if (!mounted) return;
+      if (config == null) {
+        setState(() {
+          _config = null;
+          _error = '';
+          _loading = false;
+        });
+        return;
       }
-      final config = SiteChecklistConfig.parse(data[widget.configKey]);
-      if (config.id != widget.siteId || config.name != widget.siteName || config.pinKey != widget.pinKey) {
+      if (config.id != widget.siteId || config.name != widget.siteName || config.pinKey != widget.siteId) {
         throw const FormatException('Identitas site/PIN pada JSON berbeda dari halaman yang dibuka.');
       }
-      if (!mounted) { return; }
       _prefs = prefs; _config = config;
       _staff = List<String?>.filled(config.staffCount, null);
       final draftRaw = prefs.getString(_draftKey);
@@ -178,7 +199,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
   }
   Future<void> _saveDraft() {
     final prefs = _prefs;
-    if (prefs == null || _config == null) { return Future<void>.value(); }
+    if (prefs == null || _config == null || _loading) { return Future<void>.value(); }
     final encoded = jsonEncode({'values': _values(), 'staff': _staff, 'report': _report});
     // Urutan penulisan tetap, supaya draft lama tidak menimpa perubahan terbaru.
     _writes = _writes.then((_) async {
@@ -258,9 +279,9 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       builder: (context, style, animation) => PinDialog(style: style, animation: animation,
         title: 'Verifikasi Perangkat', description: 'Masukkan PIN site untuk verifikasi online.',
         verify: (pin) async {
-          final result = await PinAuth.verifyOnServer(_prefs!, widget.pinKey, pin);
+          final result = await PinAuth.verifyOnServer(_prefs!, widget.siteId, pin);
           if (result?.status == PinServerStatus.ok) {
-            await PinAuth.saveLocal(_prefs!, widget.pinKey, pin);
+            await PinAuth.saveLocal(_prefs!, widget.siteId, pin);
             return null;
           }
           return result?.message ?? 'Verifikasi gagal. Periksa PIN dan koneksi internet.';
@@ -278,7 +299,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       pending['attempts'] = ((pending['attempts'] as num?)?.toInt() ?? 0) + 1;
       if (!await _prefs!.setString(_pendingKey, jsonEncode(pending))) { throw StateError('Pending gagal disimpan.'); }
       final response = await AppsScriptClient.postJson(_url, {
-        'site_target': widget.siteName, 'token': PinAuth.getToken(_prefs!, widget.pinKey) ?? '',
+        'site_target': widget.siteName, 'token': PinAuth.getToken(_prefs!, widget.siteId) ?? '',
         'data': pending['sheetRow'], 'formSchema': pending['formSchema'] ?? 1,
       });
       if (response.statusCode != 200) { throw StateError('HTTP ${response.statusCode}. Laporan tetap tersimpan.'); }
@@ -440,11 +461,26 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       appBar: AppBar(title: Text(widget.siteName), actions: [
         if (config != null && !_loading) IconButton(tooltip: 'Kosongkan form', onPressed: _busy ? null : _reset, icon: const Icon(Icons.restart_alt)),
       ]),
-      body: _loading ? const Center(child: CircularProgressIndicator()) : _error.isNotEmpty || config == null
-        ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(_error), const SizedBox(height: 12), FilledButton(onPressed: () { setState(() => _loading = true); _load(sync: true); }, child: const Text('Coba lagi & sinkronkan')),
-          ])))
-        : Stack(children: [
+      body: _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _error.isNotEmpty
+          ? Center(child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(_error),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () {
+                    setState(() => _loading = true);
+                    _load(sync: true);
+                  },
+                  child: const Text('Coba lagi & sinkronkan'),
+                ),
+              ]),
+            ))
+          : config == null
+            ? const Center(child: Text('konfigurasi Belum Ada'))
+            : Stack(children: [
           Column(children: [
             if (_note.isNotEmpty) Container(width: double.infinity, color: const Color(0xFFFFF3CD),
               constraints: const BoxConstraints(maxHeight: 160), padding: const EdgeInsets.all(10),

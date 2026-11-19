@@ -11,8 +11,7 @@ import '../components/app_config_repository.dart';
 import '../components/pin_auth.dart';
 import '../models/region_catalog.dart';
 import 'site_selection_page.dart';
-import 'site_placeholder_page.dart';
-import 'ttc_sudiang_page.dart';
+import 'site_checklist_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -188,11 +187,9 @@ class _HomePageState extends State<HomePage> {
           !identical(config, _configuration.value) || ModalRoute.of(pageContext)?.isCurrent != true) {
         return;
       }
-      // Hanya ID tetap sudiang yang membuka form lengkap dengan tujuan pengiriman Sudiang.
-      final Widget page = site.id == 'UPD-178'
-          ? const TtcSudiangPage()
-          : SitePlaceholderPage(siteName: site.name);
-      await Navigator.of(pageContext).push(MaterialPageRoute<void>(builder: (_) => page));
+      await Navigator.of(pageContext).push(MaterialPageRoute<void>(
+        builder: (_) => SiteChecklistPage(siteId: site.id, siteName: site.name),
+      ));
     } catch (_) {
       AppNotifier.error('Gagal membuka lokasi. Silakan coba lagi.');
     } finally {
