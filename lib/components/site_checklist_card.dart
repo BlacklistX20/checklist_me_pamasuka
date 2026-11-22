@@ -34,6 +34,14 @@ class SiteChecklistCard extends StatelessWidget {
         ),
       ]);
     }
+    if (spec.isOff(selections)) {
+      return TextFormField(
+        key: ValueKey('off:${f.id}'),
+        initialValue: '-',
+        enabled: false,
+        decoration: InputDecoration(labelText: f.label, suffixText: f.unit, isDense: true),
+      );
+    }
     if (f.readOnly && f.fixed == null) {
       return InputDecorator(decoration: InputDecoration(labelText: f.label,
         enabled: false, border: const OutlineInputBorder()),

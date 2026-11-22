@@ -1,6 +1,53 @@
 import '../models/site_checklist_config.dart';
 
-/// Renderer laporan mengikuti Format Checklist.txt, tanpa TEMPLATE_SUDIANG lama.
+class FuelSummary {
+  final double totalLiters;
+  final double? hours;
+  final double? days;
+
+  FuelSummary._(this.totalLiters, double? rawHours)
+      : hours = rawHours == null ? null : _oneDecimal(rawHours),
+        days = rawHours == null ? null : _oneDecimal(rawHours / 24);
+
+  factory FuelSummary.fromReadings(SiteChecklistConfig config, Map<String, String> values) {
+    final tanks = config.items('tanks');
+    var complete = tanks.isNotEmpty;
+    var liters = 0.0;
+    for (final tank in tanks) {
+      final reading = ChecklistReport.number(values['${tank['id']}.liters']);
+      if (reading == null || !reading.isFinite || reading < 0) {
+        complete = false;
+      } else {
+        liters += reading;
+      }
+    }
+    if (!complete) { return FuelSummary._(liters, null); }
+
+    var totalKva = 0.0;
+    for (final feed in config.pln) {
+      final kva = ChecklistReport.number(values['${feed['id']}.kva']);
+      if (kva == null || !kva.isFinite || kva < 0) {
+        return FuelSummary._(liters, null);
+      }
+      totalKva += kva;
+    }
+    if (totalKva == 0 || !totalKva.isFinite) { return FuelSummary._(liters, null); }
+    final rawHours = liters / (0.21 * totalKva);
+    return FuelSummary._(liters, rawHours.isFinite ? rawHours : null);
+  }
+
+  static double _oneDecimal(double value) => double.parse(value.toStringAsFixed(1));
+
+  String get backupText {
+    final h = hours;
+    final d = days;
+    if (h == null || d == null) { return 'Backup Time belum dapat dihitung'; }
+    String format(double n) => n.toStringAsFixed(1).replaceAll('.', ',');
+    return 'Backup Time: ${format(h)} Jam / ${format(d)} Hari';
+  }
+}
+
+/// Format teks bersama dibaca dari REPORT_TEMPLATE pada snapshot Config.
 class ChecklistReport {
   final String text;
   final Map<String, dynamic> row;
@@ -18,79 +65,122 @@ class ChecklistReport {
     final day = '${days[date.weekday - 1]} ${pad(date.day)}-${pad(date.month)}-${date.year}';
     final time = '${pad(date.hour)}:${pad(date.minute)} ${config.json['timeZoneLabel']}';
     final olo = config.json['olo']?.toString().trim() ?? '';
-    final row = <String, dynamic>{'ID': reportId, 'Hari/Tanggal': day, 'Waktu': time, 'Region': config.region, 'Lokasi': config.name, 'Nomor OLO': olo};
-    for (final f in config.fields) {
-      final raw = f.readOnly ? f.fixed?.toString() ?? '' : values[f.id] ?? '';
-      row[f.sheet] = f.options.isNotEmpty ? raw : number(raw) ?? raw;
+    final template = config.json['reportTemplate'];
+    if (template is! String || template.trim().isEmpty) {
+      throw const FormatException('REPORT_TEMPLATE belum tersedia. Isi tab Config lalu sinkronkan.');
     }
-    final totals = SiteChecklistConfig.map(config.json['deviceTotals']);
-    for (final key in totals.keys) { row['Total $key'] = totals[key]; }
-    final out = StringBuffer('*Report Checklist*\n*Region : ${config.region}*\n*Lokasi : ${config.name}*\n');
-    if (olo.isNotEmpty) { out.writeln('*Nomor OLO : $olo*'); }
-    out.writeln('*Hari/Tanggal : $day*\n*Pukul : $time*\n');
-    out.writeln('*STATUS POWER*\nStatus PLN : ${v('statusPln')}\nCapacity Trafo : ${fixed(config.power['transformerKva'])} kVA');
-    for (var i = 0; i < config.pln.length; i++) {
-      out.writeln('Capacity PLN ${i + 1} : ${fixed(config.pln[i]['capacityKva'])} kVA');
-    }
-    for (var i = 0; i < config.pln.length; i++) { out.writeln('kWh PLN ${i + 1} : ${v('${config.pln[i]['id']}.kwh')}'); }
-    out.writeln('\n*Update Perangkat*');
-    for (final e in {'genset':'Genset','pac':'PAC','rectifier':'Rectifier','ups':'UPS'}.entries) {
-      out.writeln('${e.value} Failed/Total : ${v('failed.${e.key}')}/${totals[e.key]}');
-    }
-    out.writeln('Jumlah Rak Perangkat : ${v('racks')} rak');
-    for (var i = 0; i < config.pln.length; i++) {
-      final id = config.pln[i]['id'];
-      out.writeln('\n*${config.pln.length == 1 ? 'Load PLN' : 'Load PLN ${i + 1}'}*\nkVA : ${v('$id.kva')}\nkW : ${v('$id.kw')}\nCos phi : ${v('$id.cos')}\nTegangan :');
-      out.writeln(['R-S','S-T','T-R'].map((p) => '$p : ${v('$id.v$p')}V').join(' | '));
-      out.writeln(['R-N','S-N','T-N','N-G'].map((p) => '$p : ${v('$id.v$p')}V').join(' | '));
-      out.writeln('Arus :\n${['R','S','T'].map((p) => '$p : ${v('$id.a$p')}A').join(' | ')}');
-    }
-    out.writeln('\n*UPDATE GENSET*');
-    for (final g in config.items('gensets')) { out.writeln('Kap. ${g['name']} : ${g['capacityKva']} kVA'); }
-    for (final g in config.items('gensets')) { out.writeln('Status ${g['name']} : ${v('${g['id']}.status')}'); }
-    for (final g in config.items('gensets')) { out.writeln('SMU ${g['name']} : ${v('${g['id']}.smu')} H ${v('${g['id']}.minutes')} Menit'); }
-    for (final g in config.items('gensets')) { out.writeln('Suhu ${g['name']} : ${v('${g['id']}.temp')}°C'); }
-    for (final g in config.items('gensets')) { out.writeln('Tegangan Accu ${g['name']} : ${v('${g['id']}.volt')} Volt'); }
-    out.writeln('\n*UPDATE BBM*');
-    var total = 0.0;
-    final tanks = config.items('tanks');
-    for (var i = 0; i < tanks.length; i++) {
-      final t = tanks[i]; final liters = number(values['${t['id']}.liters']);
-      total += liters ?? 0;
-      final percent = liters == null ? '—' : display(liters / (t['capacityLiters'] as num) * 100);
-      out.writeln('Level ${SiteChecklistConfig.tankName(t, i)} (${t['capacityLiters']} L) : ${v('${t['id']}.liters')} L ($percent%)');
-    }
-    final hours = (total / (config.json['litersPerHour'] as num)).round();
-    row.addAll({'Total Solar': total, 'Backup Time Jam': hours, 'Backup Time Hari': hours ~/ 24});
-    out.writeln('Total Solar : ${display(total)} L\nBackup time : $hours Jam / ${hours ~/ 24} Hari');
-    out.writeln('\n*UPDATE RECTIFIER*\nDevice | Status | Load kW | Load Ampere | Voltage | Percentage\n');
-    for (final r in config.items('rectifiers')) {
-      final id = r['id'];
-      out.writeln('• ${r['name']} | ${v('$id.status')} | ${v('$id.kw')}kW | ${v('$id.amp')}A | ${v('$id.volt')}V | ${v('$id.occ')}%');
-    }
-    out.writeln('\n*UPDATE UPS*');
-    for (final u in config.items('ups')) {
-      final id = u['id'];
-      out.writeln('\n*${u['name']}*\nStatus : ${v('$id.status')}\nLoad (Occ) : ${v('$id.kw')} kW | ${v('$id.kva')} kVA (${v('$id.occ')}%)');
-      out.writeln('Output (R|S|T) : ${['R','S','T'].map((p) => '${v('$id.v$p')}V').join(' | ')}');
-      out.writeln('Current (R|S|T) : ${['R','S','T'].map((p) => '${v('$id.a$p')}A').join(' | ')}');
-      out.writeln('Battery (Voltage|Runtime) : ${v('$id.volt')}V | ${v('$id.runtime')} Menit');
-    }
-    out.writeln('\n*Update Ruang Perangkat*\nStatus Vendor | Status PAC | Suhu | Humidity');
-    for (final floor in config.items('floors')) {
-      final rooms = config.items('rooms').where((r) => r['floor'] == floor['id']);
-      if (rooms.isEmpty) { continue; }
-      out.writeln('\n*${floor['name']}*');
-      for (final r in rooms) {
-        final id = r['id'];
-        out.writeln('• ${r['name']} : ${v('$id.vendor')} | ${v('$id.pac')} | ${v('$id.temp')}°C | ${v('$id.hum')}%');
+    final fieldsByDevice = <String, Map<String, String>>{};
+    for (final card in config.cards) {
+      final off = card.isOff(values);
+      for (final f in card.rows.expand((r) => r)) {
+        final dot = f.id.indexOf('.');
+        if (dot < 0) continue;
+        final device = f.id.substring(0, dot);
+        final fields = fieldsByDevice.putIfAbsent(device, () => <String, String>{});
+        fields[f.id.substring(dot + 1)] = off && f.options.isEmpty ? '-' : v(f.id);
       }
     }
-    row['Pelaksana'] = staff.whereType<String>().join(' / ');
-    row['PUE'] = '';
-    row['Kondisi Gedung'] = config.json['buildingCondition'] ?? 'AMAN';
-    out.writeln('\n*Pelaksana*\n${staff.whereType<String>().join(' | ')}\n\n*Kondisi Gedung ${row['Kondisi Gedung']}*');
-    return ChecklistReport(out.toString().trimRight(), spreadsheetRow(config, values, row));
+    Map<String, dynamic> device(Map<String, dynamic> item) => {
+      ...item, ...?fieldsByDevice[item['id']], 'nama': item['name'],
+    };
+    final totals = SiteChecklistConfig.map(config.json['deviceTotals']);
+    final feeds = config.pln;
+    final tanks = config.items('tanks');
+    final rooms = config.items('rooms');
+    final fuel = FuelSummary.fromReadings(config, values);
+    final people = staff.whereType<String>().toList();
+    final row = <String, dynamic>{
+      'ID': reportId, 'Hari/Tanggal': day, 'Waktu': time, 'Nomor OLO': olo,
+      'Total Solar': fuel.totalLiters, 'Backup Time Jam': fuel.hours,
+      'Backup Time Hari': fuel.days, 'Pelaksana': people.join(' / '),
+    };
+    Map<String, dynamic> tank(int index) {
+      final item = tanks[index];
+      final liters = number(values['${item['id']}.liters']);
+      return {
+        ...device(item), 'nama': SiteChecklistConfig.tankName(item, index),
+        'persen': liters == null ? '—' : display(liters / (item['capacityLiters'] as num) * 100),
+      };
+    }
+    final data = <String, dynamic>{
+      'region': config.region, 'siteName': config.name, 'siteId': config.id,
+      'olo': [if (olo.isNotEmpty) {'nomor': olo}], 'tanggal': day, 'waktu': time,
+      'statusPln': v('statusPln'), 'capacityTrafo': fixed(config.power['transformerKva']),
+      'racks': v('racks'), 'totalSolar': display(fuel.totalLiters), 'backupTime': fuel.backupText,
+      'backupJam': fuel.hours?.toStringAsFixed(1).replaceAll('.', ',') ?? '—',
+      'backupHari': fuel.days?.toStringAsFixed(1).replaceAll('.', ',') ?? '—',
+      'pelaksana': people.join(' | '), 'kondisi': config.json['buildingCondition'] ?? 'AMAN',
+      'pln': [for (var i = 0; i < feeds.length; i++) {
+        ...device(feeds[i]), 'no': i + 1, 'capacityKva': fixed(feeds[i]['capacityKva']),
+        'judul': feeds.length == 1 ? 'Load PLN' : 'Load PLN ${i + 1}',
+      }],
+      'perangkat': [for (final e in {'genset':'Genset','pac':'PAC','rectifier':'Rectifier','ups':'UPS'}.entries)
+        {'nama': e.value, 'failed': v('failed.${e.key}'), 'total': totals[e.key]}],
+      'tanks': [for (var i = 0; i < tanks.length; i++) tank(i)],
+      for (final group in ['gensets', 'rectifiers', 'ups'])
+        group: config.items(group).map(device).toList(),
+      'floors': [for (final floor in config.items('floors'))
+        if (rooms.any((r) => r['floor'] == floor['id'])) {
+          'nama': floor['name'], 'rooms': rooms.where((r) => r['floor'] == floor['id']).map(device).toList(),
+        }],
+    };
+    return ChecklistReport(_render(template, data), spreadsheetRow(config, values, row));
+  }
+
+  // {{nama}} menyisipkan nilai. {{#ups}}...{{/ups}} mengulang isi per perangkat.
+  static String _render(String template, Map<String, dynamic> data) {
+    final pattern = RegExp(r'{{\s*([#/]?)([\w-]+)\s*}}');
+    final text = template.replaceAll('\r\n', '\n');
+    final tags = pattern.allMatches(text).toList();
+    final open = <int>[];
+    final ends = <int, int>{};
+    var offset = 0;
+    for (var i = 0; i <= tags.length; i++) {
+      final literal = text.substring(offset, i == tags.length ? text.length : tags[i].start);
+      if (literal.contains('{{') || literal.contains('}}')) {
+        throw const FormatException('REPORT_TEMPLATE memuat tanda {{ atau }} yang tidak lengkap.');
+      }
+      if (i == tags.length) break;
+      final tag = tags[i];
+      offset = tag.end;
+      if (tag[1] == '#') open.add(i);
+      if (tag[1] == '/') {
+        if (open.isEmpty || tags[open.last][2] != tag[2]) {
+          throw FormatException('Penutup blok REPORT_TEMPLATE salah: ${tag[2]}.');
+        }
+        ends[open.removeLast()] = i;
+      }
+    }
+    if (open.isNotEmpty) {
+      throw FormatException('Blok REPORT_TEMPLATE belum ditutup: ${tags[open.last][2]}.');
+    }
+    final out = StringBuffer();
+    void render(int first, int limit, int start, int stop, Map<String, dynamic> scope) {
+      var cursor = start;
+      for (var i = first; i < limit; i++) {
+        final tag = tags[i];
+        out.write(text.substring(cursor, tag.start));
+        final key = tag[2]!;
+        if (!scope.containsKey(key)) throw FormatException('Field REPORT_TEMPLATE tidak dikenal: $key.');
+        final value = scope[key];
+        if (tag[1] == '#') {
+          final end = ends[i]!;
+          if (value is! List) throw FormatException('$key harus berupa blok REPORT_TEMPLATE.');
+          for (final item in value) {
+            render(i + 1, end, tag.end, tags[end].start, {...scope, ...Map<String, dynamic>.from(item as Map)});
+          }
+          cursor = tags[end].end;
+          i = end;
+        } else {
+          if (value is List || value is Map) throw FormatException('Gunakan blok untuk $key.');
+          out.write(value ?? '—');
+          cursor = tag.end;
+        }
+      }
+      out.write(text.substring(cursor, stop));
+    }
+    render(0, tags.length, 0, text.length, data);
+    return out.toString().trimRight();
   }
   static Map<String, dynamic> spreadsheetRow(SiteChecklistConfig c,
       Map<String, String> values, Map<String, dynamic> report) {
@@ -112,16 +202,22 @@ class ChecklistReport {
     }
     for (var i = 0; i < c.pln.length; i++) {
       final p = c.pln[i]; final id = p['id'];
-      final prefix = i == 0 ? 'LVMDP' : 'PLN ${i + 1}';
-      row[i == 0 ? 'Capacity PLN' : 'Capacity PLN ${i + 1}'] = p['capacityKva'] ?? '';
-      row[i == 0 ? 'KWH' : 'KWH PLN ${i + 1}'] = value('$id.kwh');
-      for (final e in {'kva':'kVA', 'kw':'kW', 'cos':'CosPhi'}.entries) {
-        row['$prefix ${e.value}'] = value('$id.${e.key}');
+      final no = (i + 1).toString().padLeft(2, '0');
+      final capacity = p['capacityKva'] ?? '';
+      final kwh = value('$id.kwh');
+      row['PLN $no Capacity'] = capacity;
+      row['PLN $no KWH'] = kwh;
+      row[i == 0 ? 'Capacity PLN' : 'Capacity PLN ${i + 1}'] = capacity;
+      row[i == 0 ? 'KWH' : 'KWH PLN ${i + 1}'] = kwh;
+      for (final prefix in ['LVMDP $no', i == 0 ? 'LVMDP' : 'PLN ${i + 1}']) {
+        for (final e in {'kva':'kVA', 'kw':'kW', 'cos':'CosPhi'}.entries) {
+          row['$prefix ${e.value}'] = value('$id.${e.key}');
+        }
+        for (final phase in ['R-S','S-T','T-R','R-N','S-N','T-N','N-G']) {
+          row['$prefix Tegangan $phase'] = value('$id.v$phase');
+        }
+        for (final phase in ['R','S','T']) { row['$prefix Load $phase'] = value('$id.a$phase'); }
       }
-      for (final phase in ['R-S','S-T','T-R','R-N','S-N','T-N','N-G']) {
-        row['$prefix Tegangan $phase'] = value('$id.v$phase');
-      }
-      for (final phase in ['R','S','T']) { row['$prefix Load $phase'] = value('$id.a$phase'); }
     }
     for (final g in c.items('gensets')) {
       final id = g['id']; final prefix = g['sheetPrefix'];
@@ -144,7 +240,10 @@ class ChecklistReport {
                for (final p in ['R','S','T']) 'v$p':'Output $p (V)',
                for (final p in ['R','S','T']) 'a$p':'Arus $p (A)'}
             : {'status':'Status','kw':'Load kW','amp':'Load Ampere','volt':'Voltage','occ':'Load Occupancy (%)'};
-        for (final e in mapping.entries) { row['$prefix ${e.value}'] = value('$id.${e.key}'); }
+        final off = values['$id.status'] == 'OFF';
+        for (final e in mapping.entries) {
+          row['$prefix ${e.value}'] = off && e.key != 'status' ? '-' : value('$id.${e.key}');
+        }
       }
     }
     for (final floor in c.items('floors')) {
@@ -152,12 +251,21 @@ class ChecklistReport {
       for (final e in {'temp':'Suhu','hum':'Humidity'}.entries) {
         final valid = rooms.map((r) => number(values['${r['id']}.${e.key}']))
             .whereType<double>().where((n) => n.isFinite && n >= 0 && (e.key != 'hum' || n <= 100)).toList();
-        row["${floor['sheetPrefix'] ?? floor['name']} ${e.value}"] = valid.isEmpty ? ''
+        row["${floor['sheetPrefix'] ?? floor['name']} ${e.value}"] = rooms.isEmpty ? 'N/A' : valid.isEmpty ? ''
             : double.parse((valid.reduce((a, b) => a + b) / valid.length).toStringAsFixed(2));
       }
     }
-    final allowed = c.sheetHeaders.toSet();
-    return Map.fromEntries(row.entries.where((e) => allowed.contains(e.key)));
+    if (c.items('tanks').isEmpty) {
+      for (final key in ['Total Solar','Total Kapasitas Tangki','Backup Time Jam','Backup Time Hari']) {
+        row[key] = 'N/A';
+      }
+    }
+    final slots = RegExp(r'^(?:(?:Rect|UPS|PLN|LVMDP) \d+ |(?:Kap|Status|SMU|Batt Volt|Suhu) Genset \d+$|(?:KWH PLN|Capacity PLN) \d+$|Lantai .+ (?:Suhu|Humidity)$)');
+    return {
+      for (final header in c.sheetHeaders)
+        if (row.containsKey(header)) header: row[header]
+        else if (slots.hasMatch(header)) header: 'N/A',
+    };
   }
 
 }

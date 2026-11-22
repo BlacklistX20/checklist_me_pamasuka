@@ -80,7 +80,9 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       matchedKey = entry.key;
       match = form;
     }
-    return match == null ? null : SiteChecklistConfig.parse(match);
+    return match == null ? null : SiteChecklistConfig.parse({
+      ...match, 'reportTemplate': snapshot['REPORT_TEMPLATE'],
+    });
   }
 
   Future<void> _load({bool sync = false}) async {
@@ -234,6 +236,10 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       }
       for (final card in config.cards) {
         for (final f in card.rows.expand((r) => r)) {
+          if (card.isOff(values) && f.options.isEmpty) {
+            values[f.id] = '-';
+            continue;
+          }
           final value = values[f.id] ?? '';
           final label = '${config.tabLabel(config.mode == 'floor' ? card.floor : card.category)} • ${card.title} • ${f.label}';
           if (f.readOnly) {
@@ -382,10 +388,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
     return groups.entries.map((entry) {
       if (!titles.containsKey(entry.key)) { return _card(entry.value.single); }
       final specs = entry.value;
-      final values = _values();
-      final total = config.items('tanks').fold<double>(0,
-        (sum, t) => sum + (ChecklistReport.number(values['${t['id']}.liters']) ?? 0));
-      final hours = (total / (config.json['litersPerHour'] as num)).round();
+      final fuel = entry.key == 'tanks' ? FuelSummary.fromReadings(config, _values()) : null;
       return SectionCard(title: titles[entry.key]!, child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           for (var i = 0; i < specs.length; i++) ...[
@@ -395,10 +398,10 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
             const SizedBox(height: 10),
             _card(specs[i], embedded: true),
           ],
-          if (entry.key == 'tanks') ...[
+          if (fuel != null) ...[
             const Divider(height: 24),
-            Text('Total Solar: ${ChecklistReport.display(total)} L'),
-            Text('Backup Time: $hours Jam / ${hours ~/ 24} Hari'),
+            Text('Total Solar: ${ChecklistReport.display(fuel.totalLiters)} L'),
+            Text(fuel.backupText),
           ],
         ],
       ));
@@ -409,7 +412,8 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
     final values = _values();
     final progress = <String>[];
     for (final tab in config.tabIds) {
-      final fields = config.cardsFor(tab).expand((c) => c.rows.expand((r) => r))
+      final fields = config.cardsFor(tab).expand((c) => c.rows.expand((r) => r)
+          .where((f) => !c.isOff(values) || f.options.isNotEmpty))
           .where((f) => !f.readOnly).toList();
       final filled = fields.where((f) => values[f.id]?.trim().isNotEmpty ?? false).length;
       progress.add(fields.isNotEmpty && filled == fields.length ? '✓' : '$filled/${fields.length}');
@@ -422,7 +426,8 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
   Widget _reportTab() {
     final config = _config!;
     final values = _values();
-    final fields = config.fields.where((f) => !f.readOnly).toList();
+    final fields = config.cards.expand((c) => c.rows.expand((r) => r)
+        .where((f) => !c.isOff(values) || f.options.isNotEmpty)).where((f) => !f.readOnly).toList();
     final filled = fields.where((f) => values[f.id]?.trim().isNotEmpty ?? false).length;
     return ListView(padding: EdgeInsets.fromLTRB(12, 12, 12, 100 + MediaQuery.paddingOf(context).bottom), children: [
       Text('Terisi $filled/${fields.length} kolom', style: const TextStyle(fontWeight: FontWeight.bold)),

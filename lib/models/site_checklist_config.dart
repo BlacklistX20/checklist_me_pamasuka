@@ -63,7 +63,6 @@ class SiteChecklistConfig {
     check(json['sheetHeaders'] is List && (json['sheetHeaders'] as List).contains('Site ID') && (json['sheetHeaders'] as List).contains('ID'), 'sheetHeaders harus memuat ID dan Site ID. Sinkronkan konfigurasi.');
     check(['floor', 'category'].contains(json['navigationMode']), 'navigationMode harus floor/category.');
     check(json['utcOffsetHours'] is num && (json['utcOffsetHours'] as num).abs() <= 14, 'utcOffsetHours tidak valid.');
-    check(json['litersPerHour'] is num && (json['litersPerHour'] as num) > 0, 'litersPerHour harus > 0.');
     for (final key in ['floors', 'gensets', 'tanks', 'rectifiers', 'ups', 'rooms', 'photos', 'collages']) {
       check(json[key] is List, '$key harus berupa array.');
     }
@@ -217,7 +216,7 @@ class SiteChecklistConfig {
         n('$id.liters', 'Volume', 'L', volumeKey, max: (t['capacityLiters'] as num).toDouble(), legacy: old == null ? null : '${old}Liter', allowZero: true, allowSame: true),
       ]], photos: photoIds(t), tank: t);
     }
-    const statuses = ['OK', 'Alarm', 'On Service'];
+    const statuses = ['OK', 'Alarm', 'On Service', 'OFF'];
     for (final r in items('rectifiers')) {
       final id = r['id'] as String; final s = 'Rect ${(items('rectifiers').indexWhere((x) => x['id'] == id) + 1).toString().padLeft(2, '0')}'; final old = r['legacyIndex'];
       add(id, 'Update Rectifier — ${r['name']}', cardFloor(r), 'Recti', [
@@ -270,5 +269,8 @@ class ChecklistCardSpec {
   final List<List<ChecklistFieldSpec>> rows;
   final List<String> photos;
   final Map<String, dynamic>? tank;
+  bool isOff(Map<String, String> values) =>
+      (category == 'Recti' || category == 'UPS') && values['$id.status'] == 'OFF';
+
   const ChecklistCardSpec(this.id, this.title, this.floor, this.category, this.rows, this.photos, this.tank);
 }
