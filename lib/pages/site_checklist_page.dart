@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:forui/forui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/region_catalog.dart' show configObject;
 import '../models/site_checklist_config.dart';
 import '../components/app_config_repository.dart';
@@ -46,6 +46,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
   String _error = '', _note = '', _report = '';
   int _tab = 0;
   bool _loading = true, _working = false, _sending = false, _calculating = false;
+  bool _openingWhatsApp = false;
   Timer? _debounce;
   Future<void> _writes = Future<void>.value();
   bool get _busy => _working || _sending;
@@ -114,7 +115,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       final legacy = legacyRaw == null ? <String, dynamic>{} : SiteChecklistConfig.map(jsonDecode(legacyRaw));
       for (final f in config.fields) {
         final value = f.readOnly ? f.fixed?.toString() ?? '' :
-            (saved[f.id]?.toString() ?? (draftRaw == null ? _legacyValue(legacy, f) : ''));
+        (saved[f.id]?.toString() ?? (draftRaw == null ? _legacyValue(legacy, f) : ''));
         if (f.options.isNotEmpty) {
           if (f.options.contains(value)) { _selections[f.id] = value; }
         } else {
@@ -122,7 +123,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
         }
       }
       final people = draft['staff'] is List ? draft['staff'] as List :
-          [for (var i = 1; i <= config.staffCount; i++) legacy['pelaksana$i']];
+      [for (var i = 1; i <= config.staffCount; i++) legacy['pelaksana$i']];
       final staffNames = config.names;
       for (var i = 0; i < _staff.length && i < people.length; i++) {
         final name = people[i];
@@ -183,7 +184,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       if (tanks.isNotEmpty) {
         _calculating = true;
         _controllers['${tanks.first['id']}.liters']!.text = h == null || !h.isFinite ? '' :
-            SiteChecklistConfig.tankLiters(tanks.first, h).round().toString();
+        SiteChecklistConfig.tankLiters(tanks.first, h).round().toString();
         _calculating = false;
       }
     }
@@ -207,9 +208,9 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
     if (!mounted) { return false; }
     return await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: Text(title), content: SingleChildScrollView(child: Text(body)), actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Lanjutkan')),
-      ],
+      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Lanjutkan')),
+    ],
     )) ?? false;
   }
   void _message(String message) { if (mounted) { setState(() => _note = message); } }
@@ -349,19 +350,19 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       final fuel = entry.key == 'tanks' ? FuelSummary.fromReadings(config, _values()) : null;
       return SectionCard(title: titles[entry.key]!, child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          for (var i = 0; i < specs.length; i++) ...[
-            if (i > 0) const Divider(height: 24),
-            Text(specs[i].title.split(' — ').skip(1).join(' — '),
+        for (var i = 0; i < specs.length; i++) ...[
+          if (i > 0) const Divider(height: 24),
+          Text(specs[i].title.split(' — ').skip(1).join(' — '),
               style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            _card(specs[i], embedded: true),
-          ],
-          if (fuel != null) ...[
-            const Divider(height: 24),
-            Text('Total Solar: ${ChecklistReport.display(fuel.totalLiters)} L'),
-            Text(fuel.backupText),
-          ],
+          const SizedBox(height: 10),
+          _card(specs[i], embedded: true),
         ],
+        if (fuel != null) ...[
+          const Divider(height: 24),
+          Text('Total Solar: ${ChecklistReport.display(fuel.totalLiters)} L'),
+          Text(fuel.backupText),
+        ],
+      ],
       ));
     }).toList();
   }
@@ -378,8 +379,8 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
     }
     progress.add(_pending != null ? 'Pending' : (_report.isNotEmpty ? 'Tersedia' : ''));
     return FloatingPillTabs(
-      labels: [for (final id in config.tabIds) config.mode == 'floor' ? 'Lt. $id' : config.tabLabel(id), 'Report'],
-      progress: progress, selectedIndex: _tab, onSelected: (i) => setState(() => _tab = i));
+        labels: [for (final id in config.tabIds) config.mode == 'floor' ? 'Lt. $id' : config.tabLabel(id), 'Report'],
+        progress: progress, selectedIndex: _tab, onSelected: (i) => setState(() => _tab = i));
   }
   Widget _staffCard(List<String> names) {
     Widget field(int i) {
@@ -431,6 +432,31 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
     );
   }
 
+  Future<void> _openWhatsApp() async {
+    if (_openingWhatsApp || _report.isEmpty) {
+      return;
+    }
+    final uri = Uri(
+      scheme: 'whatsapp',
+      host: 'send',
+      query: 'text=${Uri.encodeComponent(_report)}',
+    );
+    const failure = 'WhatsApp tidak dapat dibuka. Gunakan tombol Salin untuk menyalin laporan.';
+    setState(() => _openingWhatsApp = true);
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) {
+        _message(failure);
+      }
+    } on Exception {
+      _message(failure);
+    } finally {
+      if (mounted) {
+        setState(() => _openingWhatsApp = false);
+      }
+    }
+  }
+
   Widget _reportTab() {
     final config = _config!;
     final values = _values();
@@ -445,7 +471,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       _staffCard(config.names),
       SectionCard(title: 'Kolase Foto', child: Wrap(spacing: 8, children: [
         for (final c in config.items('collages')) OutlinedButton.icon(onPressed: _busy ? null : () => _collage(c),
-          icon: const Icon(Icons.grid_view), label: Text(c['name'] as String)),
+            icon: const Icon(Icons.grid_view), label: Text(c['name'] as String)),
       ])),
       if (_pending != null) ...[
         const Text('Laporan pending akan dikirim ulang persis seperti saat dibuat.'),
@@ -455,13 +481,16 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
         if (check.errors.isNotEmpty)
           Text('Kirim terkunci. ${check.errors.first}'),
         FilledButton(onPressed: _busy || check.errors.isNotEmpty ? null : _generate,
-          child: const Text('Generate & Kirim Laporan')),
+            child: const Text('Generate & Kirim Laporan')),
       ],
       if (_busy) const LinearProgressIndicator(),
       if (_report.isNotEmpty) SectionCard(title: 'Teks Laporan', child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Wrap(spacing: 8, children: [
           OutlinedButton(onPressed: () async { await Clipboard.setData(ClipboardData(text: _report)); _message('Teks laporan disalin.'); }, child: const Text('Salin')),
-          OutlinedButton(onPressed: () => SharePlus.instance.share(ShareParams(text: _report)), child: const Text('Bagikan')),
+          OutlinedButton(
+            onPressed: _openingWhatsApp ? null : _openWhatsApp,
+            child: const Text('Bagikan ke WhatsApp'),
+          ),
         ]), SelectableText(_report),
       ])),
     ]);
@@ -474,39 +503,39 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
         if (config != null && !_loading) IconButton(tooltip: 'Kosongkan form', onPressed: _busy ? null : _reset, icon: const Icon(Icons.restart_alt)),
       ]),
       body: _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _error.isNotEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : _error.isNotEmpty
           ? Center(child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(_error),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () {
-                    setState(() => _loading = true);
-                    _load(sync: true);
-                  },
-                  child: const Text('Coba lagi & sinkronkan'),
-                ),
-              ]),
-            ))
+        padding: const EdgeInsets.all(20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(_error),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () {
+              setState(() => _loading = true);
+              _load(sync: true);
+            },
+            child: const Text('Coba lagi & sinkronkan'),
+          ),
+        ]),
+      ))
           : config == null
-            ? const Center(child: Text('konfigurasi Belum Ada'))
-            : Stack(children: [
-          Column(children: [
-            if (_note.isNotEmpty) Container(width: double.infinity, color: const Color(0xFFFFF3CD),
+          ? const Center(child: Text('konfigurasi Belum Ada'))
+          : Stack(children: [
+        Column(children: [
+          if (_note.isNotEmpty) Container(width: double.infinity, color: const Color(0xFFFFF3CD),
               constraints: const BoxConstraints(maxHeight: 160), padding: const EdgeInsets.all(10),
               child: SingleChildScrollView(child: Text(_note))),
-            Expanded(child: _tab == config.tabIds.length ? _reportTab() : AbsorbPointer(
-              absorbing: _busy,
-              child: ListView(key: PageStorageKey(config.tabIds[_tab]),
+          Expanded(child: _tab == config.tabIds.length ? _reportTab() : AbsorbPointer(
+            absorbing: _busy,
+            child: ListView(key: PageStorageKey(config.tabIds[_tab]),
                 padding: EdgeInsets.fromLTRB(12, 12, 12, 100 + MediaQuery.paddingOf(context).bottom),
                 children: _groupCards(config.tabIds[_tab])),
-            )),
-          ]),
-          Positioned(left: 12, right: 12, bottom: 12,
-            child: SafeArea(top: false, child: _navigation())),
+          )),
         ]),
+        Positioned(left: 12, right: 12, bottom: 12,
+            child: SafeArea(top: false, child: _navigation())),
+      ]),
     );
   }
   @override
