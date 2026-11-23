@@ -9,12 +9,21 @@ class FuelSummary {
       : hours = rawHours == null ? null : _oneDecimal(rawHours),
         days = rawHours == null ? null : _oneDecimal(rawHours / 24);
 
+  static double? tankVolume(Map<String, dynamic> tank, Map<String, String> values) {
+    final id = tank['id'];
+    final volume = values['$id.liters']?.trim() ?? '';
+    if (volume.isNotEmpty) return ChecklistReport.number(volume);
+    final height = ChecklistReport.number(values['$id.height']);
+    if (height == null || !height.isFinite || height < 0) return null;
+    return SiteChecklistConfig.tankLiters(tank, height).roundToDouble();
+  }
+
   factory FuelSummary.fromReadings(SiteChecklistConfig config, Map<String, String> values) {
     final tanks = config.items('tanks');
     var complete = tanks.isNotEmpty;
     var liters = 0.0;
     for (final tank in tanks) {
-      final reading = ChecklistReport.number(values['${tank['id']}.liters']);
+      final reading = tankVolume(tank, values);
       if (reading == null || !reading.isFinite || reading < 0) {
         complete = false;
       } else {
@@ -88,7 +97,7 @@ class ChecklistReport {
     final tanks = config.items('tanks');
     final rooms = config.items('rooms');
     final fuel = FuelSummary.fromReadings(config, values);
-    final people = staff.whereType<String>().toList();
+    final people = staff.whereType<String>().map((name) => name.trim()).where((name) => name.isNotEmpty).toList();
     final row = <String, dynamic>{
       'ID': reportId, 'Hari/Tanggal': day, 'Waktu': time, 'Nomor OLO': olo,
       'Total Solar': fuel.totalLiters, 'Backup Time Jam': fuel.hours,
@@ -96,9 +105,10 @@ class ChecklistReport {
     };
     Map<String, dynamic> tank(int index) {
       final item = tanks[index];
-      final liters = number(values['${item['id']}.liters']);
+      final liters = FuelSummary.tankVolume(item, values);
       return {
         ...device(item), 'nama': SiteChecklistConfig.tankName(item, index),
+        'liters': liters == null ? '—' : display(liters),
         'persen': liters == null ? '—' : display(liters / (item['capacityLiters'] as num) * 100),
       };
     }
@@ -109,7 +119,8 @@ class ChecklistReport {
       'racks': v('racks'), 'totalSolar': display(fuel.totalLiters), 'backupTime': fuel.backupText,
       'backupJam': fuel.hours?.toStringAsFixed(1).replaceAll('.', ',') ?? '—',
       'backupHari': fuel.days?.toStringAsFixed(1).replaceAll('.', ',') ?? '—',
-      'pelaksana': people.join(' | '), 'kondisi': config.json['buildingCondition'] ?? 'AMAN',
+      'pelaksana': people.map((name) => '- $name').join('\n'),
+      'kondisi': config.json['buildingCondition'] ?? 'AMAN',
       'pln': [for (var i = 0; i < feeds.length; i++) {
         ...device(feeds[i]), 'no': i + 1, 'capacityKva': fixed(feeds[i]['capacityKva']),
         'judul': feeds.length == 1 ? 'Load PLN' : 'Load PLN ${i + 1}',

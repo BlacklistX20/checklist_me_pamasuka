@@ -51,6 +51,61 @@ class SiteChecklistConfig {
   static String tankName(Map<String, dynamic> t, int index) =>
       (t['name']?.toString().trim().isNotEmpty ?? false) ? t['name'] as String : 'Tangki ${index + 1}';
 
+  ({List<String> errors, List<String> warnings}) validateSubmission(
+      Map<String, String> values, List<String?> people, bool Function(String) hasPhoto) {
+    final errors = <String>[];
+    final warnings = <String>[];
+    for (var i = 0; i < staffCount; i++) {
+      if (i >= people.length || (people[i]?.trim() ?? '').isEmpty) {
+        errors.add('Nama Pelaksana ${i + 1} belum diisi.');
+      }
+    }
+    for (final photo in items('photos')) {
+      if (photo['required'] == true && !hasPhoto(photo['id'] as String)) {
+        errors.add("Foto ${photo['label']} wajib diambil.");
+      }
+    }
+    for (final card in cards) {
+      final tab = tabLabel(mode == 'floor' ? card.floor : card.category);
+      final off = card.isOff(values);
+      var hasFuel = false;
+      for (final field in card.rows.expand((row) => row)) {
+        final label = '$tab • ${card.title} • ${field.label}';
+        if (field.readOnly) {
+          if (field.fixed == null) warnings.add('$label: belum diatur di JSON.');
+          continue;
+        }
+        final raw = values[field.id] ?? '';
+        if (field.options.isNotEmpty) {
+          if (!field.options.contains(raw)) errors.add('$label: pilih status.');
+          continue;
+        }
+        if (off) continue;
+        if (raw.trim().isEmpty) {
+          if (card.tank == null) errors.add('$label: wajib diisi.');
+          continue;
+        }
+        final n = double.tryParse(raw.trim().replaceAll(',', '.'));
+        if (n == null || !n.isFinite || n < 0) {
+          errors.add('$label: angka tidak valid.');
+          continue;
+        }
+        if (n == 0 && !field.allowZero) errors.add('$label: harus lebih dari 0.');
+        if (field.max != null && n > field.max!) {
+          warnings.add('$label: $raw ${field.unit} melebihi maksimum ${field.max}.');
+        }
+        if ((field.id.startsWith('failed.') || field.id == 'racks' || field.id.endsWith('.minutes')) && n % 1 != 0) {
+          errors.add('$label: harus bilangan bulat.');
+        }
+        if (card.tank != null && n > 0) hasFuel = true;
+      }
+      if (card.tank != null && !hasFuel) {
+        errors.add('$tab • ${card.title}: isi tinggi atau volume BBM lebih dari 0.');
+      }
+    }
+    return (errors: errors, warnings: warnings);
+  }
+
   void _validate() {
     void check(bool ok, String message) {
       if (!ok) { throw FormatException(message); }
@@ -68,7 +123,7 @@ class SiteChecklistConfig {
     }
     check(json['power'] is Map && json['staff'] is Map && json['deviceTotals'] is Map, 'power/staff/deviceTotals harus objek.');
     check(staff['count'] is int && (staff['count'] as int) > 0 && (staff['count'] as int) <= 20, 'Jumlah petugas harus 1–20.');
-    check(staff['names'] is List && (staff['names'] as List).isNotEmpty, 'Nama petugas wajib diisi.');
+    check(staff['names'] is List, 'staff.names harus berupa array. Gunakan [] untuk input nama manual.');
     check((staff['names'] as List).every((x) => x is String && x.trim().isNotEmpty), 'Nama petugas tidak valid.');
     check(names.toSet().length == names.length, 'Nama petugas tidak boleh ganda.');
     check(power['pln'] is List && pln.isNotEmpty, 'Minimal satu PLN diperlukan.');
@@ -195,7 +250,7 @@ class SiteChecklistConfig {
       add(id, pln.length == 1 ? 'Load PLN' : 'Load PLN ${i + 1}', pf, 'Main Power', [
         [n('$id.kva', 'Load', 'kVA', '${prefix}_KVA', legacy: old('Kva')), n('$id.kw', 'Load', 'kW', '${prefix}_KW', legacy: old('Kw')), n('$id.cos', 'Cos phi', '', '${prefix}_Cos_Phi', max: 1, legacy: old('CosPhi'))],
         [for (final s in ['R-S','S-T','T-R']) n('$id.v$s', s, 'V', '${prefix}_Tegangan_$s')],
-        [for (final s in ['R-N','S-N','T-N','N-G']) n('$id.v$s', s, 'V', '${prefix}_Tegangan_$s', legacy: old({'R-N':'Rs','S-N':'Sn','T-N':'Tn','N-G':'Ng'}[s]!))],
+        [for (final s in ['R-N','S-N','T-N','N-G']) n('$id.v$s', s, 'V', '${prefix}_Tegangan_$s', allowZero: s == 'N-G', legacy: old({'R-N':'Rs','S-N':'Sn','T-N':'Tn','N-G':'Ng'}[s]!))],
         [for (final s in ['R','S','T']) n('$id.a$s', 'Arus $s', 'A', '${prefix}_Load_$s', legacy: old('Arus$s'))],
       ], photos: photoIds(p));
     }

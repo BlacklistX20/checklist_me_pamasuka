@@ -43,7 +43,6 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
   final Map<String, String> _selections = {};
   List<String?> _staff = [];
   Map<String, dynamic>? _pending;
-  Map<String, String> _previous = {};
   String _error = '', _note = '', _report = '';
   int _tab = 0;
   bool _loading = true, _working = false, _sending = false, _calculating = false;
@@ -53,7 +52,6 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
   String get _storageId => SiteChecklistConfig.storageId(widget.siteId);
   String get _draftKey => 'checklist_${_storageId}_draft_v1';
   String get _pendingKey => widget.siteId == 'UPD-178' ? 'ttc_sudiang_pending_submission' : 'checklist_${widget.siteId}_pending';
-  String get _lastKey => 'checklist_${_storageId}_last_v1';
   String get _url => dotenv.isInitialized ? (dotenv.env['SCRIPT_URL'] ?? '') : '';
 
   @override
@@ -125,8 +123,12 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       }
       final people = draft['staff'] is List ? draft['staff'] as List :
           [for (var i = 1; i <= config.staffCount; i++) legacy['pelaksana$i']];
+      final staffNames = config.names;
       for (var i = 0; i < _staff.length && i < people.length; i++) {
-        if (config.names.contains(people[i])) { _staff[i] = people[i] as String; }
+        final name = people[i];
+        if (name is String && name.trim().isNotEmpty && (staffNames.isEmpty || staffNames.contains(name))) {
+          _staff[i] = name;
+        }
       }
       final pendingRaw = prefs.getString(_pendingKey);
       if (pendingRaw != null) {
@@ -135,16 +137,6 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
         _note = 'Ada laporan tersimpan yang belum selesai dikirim.';
       } else {
         _report = draft['report']?.toString() ?? '';
-      }
-      final previousRaw = prefs.getString(_lastKey);
-      if (previousRaw != null) {
-        _previous = Map<String, String>.from(jsonDecode(previousRaw) as Map);
-      } else if (widget.siteId == 'UPD-178') {
-        final oldPrevious = prefs.getString('ttc_sudiang_last_submitted_report');
-        if (oldPrevious != null) {
-          final oldValues = SiteChecklistConfig.map(jsonDecode(oldPrevious));
-          _previous = {for (final f in config.fields) f.id: _legacyValue(oldValues, f)};
-        }
       }
       final photos = ChecklistPhotos(config, prefs);
       _photos = photos;
@@ -190,7 +182,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       final h = ChecklistReport.number(_controllers[id]?.text);
       if (tanks.isNotEmpty) {
         _calculating = true;
-        _controllers['${tanks.first['id']}.liters']!.text = h == null ? '' :
+        _controllers['${tanks.first['id']}.liters']!.text = h == null || !h.isFinite ? '' :
             SiteChecklistConfig.tankLiters(tanks.first, h).round().toString();
         _calculating = false;
       }
@@ -226,50 +218,20 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
     if (_busy || _pending != null) { return; }
     setState(() => _working = true);
     try {
-      if (_staff.any((s) => s == null)) { throw StateError('Pilih semua petugas pelaksana.'); }
-      if (_staff.toSet().length < _staff.length && !await _confirm('Petugas sama', 'Ada nama petugas yang dipilih lebih dari sekali. Lanjutkan?')) { return; }
+      final people = _staff.map((name) => name?.trim() ?? '').toList();
+      final config = _config!;
+      final values = _values();
+      final check = config.validateSubmission(values, people, _photos!.has);
+      if (check.errors.isNotEmpty) { throw StateError(check.errors.join('\n')); }
+      if (people.toSet().length < people.length && !await _confirm('Petugas sama', 'Ada nama petugas yang sama. Lanjutkan?')) { return; }
       if (!mounted) { return; }
-      final config = _config!; final values = _values();
-      final errors = <String>[]; final warnings = <String>[];
-      for (final p in config.items('photos')) {
-        if (p['required'] == true && !_photos!.has(p['id'] as String)) { errors.add('Foto ${p['label']} wajib diambil.'); }
-      }
-      for (final card in config.cards) {
-        for (final f in card.rows.expand((r) => r)) {
-          if (card.isOff(values) && f.options.isEmpty) {
-            values[f.id] = '-';
-            continue;
-          }
-          final value = values[f.id] ?? '';
-          final label = '${config.tabLabel(config.mode == 'floor' ? card.floor : card.category)} • ${card.title} • ${f.label}';
-          if (f.readOnly) {
-            if (f.fixed == null) { warnings.add('$label: belum diatur di JSON.'); }
-            continue;
-          }
-          if (f.options.isNotEmpty) {
-            if (!f.options.contains(value)) { errors.add('$label: pilih status.'); }
-            continue;
-          }
-          final n = ChecklistReport.number(value);
-          if (value.trim().isNotEmpty && (n == null || !n.isFinite || n < 0)) { errors.add('$label: angka tidak valid.'); continue; }
-          final exceeded = n != null && f.max != null && n > f.max!;
-          if (exceeded && card.tank != null) { errors.add('$label: melebihi maksimum ${f.max}.'); }
-          else if (exceeded) { warnings.add('$label: melebihi maksimum ${f.max}.'); }
-          if (!f.allowZero && (n == null || n == 0)) { warnings.add('$label: kosong atau nol.'); }
-          if (n != null && n > 0 && !f.allowSame && _previous[f.id] == value) { warnings.add('$label: sama dengan laporan terakhir.'); }
-          if ((f.id.startsWith('failed.') || f.id == 'racks' || f.id.endsWith('.minutes')) && n != null && n % 1 != 0) {
-            errors.add('$label: harus bilangan bulat.');
-          }
-        }
-      }
-      if (errors.isNotEmpty) { throw StateError(errors.join('\n')); }
-      if (warnings.isNotEmpty && !await _confirm('Periksa hasil checklist', '${warnings.join('\n')}\n\nTetap buat dan kirim laporan?')) { return; }
+      if (check.warnings.isNotEmpty && !await _confirm('Periksa hasil checklist', '${check.warnings.join('\n')}\n\nTetap buat dan kirim laporan?')) { return; }
       if (!mounted) { return; }
       final now = DateTime.now().toUtc();
       final reportId = now.millisecondsSinceEpoch.toString();
-      final report = ChecklistReport.build(config, values, _staff, now, reportId);
+      final report = ChecklistReport.build(config, values, people, now, reportId);
       final pending = <String, dynamic>{'reportId': reportId, 'sheetRow': report.row,
-        'reportText': report.text, 'snapshot': values, 'attempts': 0, 'formSchema': 3};
+        'reportText': report.text, 'attempts': 0, 'formSchema': 3};
       if (!await _prefs!.setString(_pendingKey, jsonEncode(pending))) { throw StateError('Laporan gagal disimpan. Pengiriman dibatalkan.'); }
       _pending = pending; _report = report.text;
       await _saveDraft();
@@ -311,10 +273,6 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       if (response.statusCode != 200) { throw StateError('HTTP ${response.statusCode}. Laporan tetap tersimpan.'); }
       final result = SiteChecklistConfig.map(jsonDecode(response.body));
       if (result['status'] == 'success') {
-        if ((pending['formSchema'] == 2 || pending['formSchema'] == 3) && pending['snapshot'] is Map) {
-          _previous = Map<String, String>.from(pending['snapshot'] as Map);
-          await _prefs!.setString(_lastKey, jsonEncode(_previous));
-        }
         if (!await _prefs!.remove(_pendingKey)) { throw StateError('Data terkirim tetapi pending belum terhapus; retry menggunakan ID yang sama.'); }
         _pending = null;
         final warnings = (result['warnings'] as List?) ?? [];
@@ -423,9 +381,60 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       labels: [for (final id in config.tabIds) config.mode == 'floor' ? 'Lt. $id' : config.tabLabel(id), 'Report'],
       progress: progress, selectedIndex: _tab, onSelected: (i) => setState(() => _tab = i));
   }
+  Widget _staffCard(List<String> names) {
+    Widget field(int i) {
+      final decoration = InputDecoration(
+        labelText: 'Pelaksana ${i + 1}',
+        border: const OutlineInputBorder(),
+      );
+      void save(String? name) {
+        _staff[i] = name;
+        _changed('staff');
+      }
+      if (names.isEmpty) {
+        return TextFormField(
+          initialValue: _staff[i] ?? '',
+          enabled: !_busy,
+          decoration: decoration,
+          keyboardType: TextInputType.name,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: i + 1 < _staff.length ? TextInputAction.next : TextInputAction.done,
+          maxLines: null,
+          inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[\r\n]+'), replacementString: ' ')],
+          onChanged: save,
+        );
+      }
+      return DropdownButtonFormField<String>(
+        initialValue: _staff[i],
+        decoration: decoration,
+        isExpanded: true,
+        isDense: false,
+        itemHeight: null,
+        items: [for (final name in names) DropdownMenuItem(value: name, child: Text(name, softWrap: true))],
+        onChanged: _busy ? null : save,
+      );
+    }
+
+    return SectionCard(
+      title: 'Petugas Pelaksana',
+      child: Column(
+        // Reset membuat daftar baru. Selama mengetik, posisi kursor tetap terjaga.
+        key: ObjectKey(_staff),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < _staff.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            field(i),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _reportTab() {
     final config = _config!;
     final values = _values();
+    final check = config.validateSubmission(values, _staff, _photos!.has);
     final fields = config.cards.expand((c) => c.rows.expand((r) => r)
         .where((f) => !c.isOff(values) || f.options.isNotEmpty)).where((f) => !f.readOnly).toList();
     final filled = fields.where((f) => values[f.id]?.trim().isNotEmpty ?? false).length;
@@ -433,14 +442,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       Text('Terisi $filled/${fields.length} kolom', style: const TextStyle(fontWeight: FontWeight.bold)),
       const SizedBox(height: 8), LinearProgressIndicator(value: fields.isEmpty ? 0 : filled / fields.length),
       const SizedBox(height: 12),
-      SectionCard(title: 'Petugas Pelaksana', child: Column(children: [
-        for (var i = 0; i < _staff.length; i++) Padding(padding: const EdgeInsets.only(bottom: 10), child: DropdownButtonFormField<String>(
-          key: ValueKey('staff$i:${_staff[i]}'), initialValue: _staff[i], isExpanded: true,
-          decoration: InputDecoration(labelText: 'Pelaksana ${i + 1}', border: const OutlineInputBorder()),
-          items: config.names.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
-          onChanged: _busy ? null : (n) { _staff[i] = n; _changed('staff'); },
-        )),
-      ])),
+      _staffCard(config.names),
       SectionCard(title: 'Kolase Foto', child: Wrap(spacing: 8, children: [
         for (final c in config.items('collages')) OutlinedButton.icon(onPressed: _busy ? null : () => _collage(c),
           icon: const Icon(Icons.grid_view), label: Text(c['name'] as String)),
@@ -449,7 +451,12 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
         const Text('Laporan pending akan dikirim ulang persis seperti saat dibuat.'),
         FilledButton(onPressed: _busy ? null : _send, child: const Text('Kirim ulang')),
         TextButton(onPressed: _busy ? null : _discardPending, child: const Text('Hapus pending')),
-      ] else FilledButton(onPressed: _busy ? null : _generate, child: const Text('Generate & Kirim Laporan')),
+      ] else ...[
+        if (check.errors.isNotEmpty)
+          Text('Kirim terkunci. ${check.errors.first}'),
+        FilledButton(onPressed: _busy || check.errors.isNotEmpty ? null : _generate,
+          child: const Text('Generate & Kirim Laporan')),
+      ],
       if (_busy) const LinearProgressIndicator(),
       if (_report.isNotEmpty) SectionCard(title: 'Teks Laporan', child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Wrap(spacing: 8, children: [
