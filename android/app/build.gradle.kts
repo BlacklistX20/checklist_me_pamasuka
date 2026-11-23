@@ -1,10 +1,16 @@
+import com.android.build.api.artifact.SingleArtifact
+import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.api.variant.BuiltArtifactsLoader
+import java.io.File
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-android {
+extensions.configure<ApplicationExtension> {
     namespace = "com.pamasuka.checklist_me_pamasuka"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -30,7 +36,7 @@ android {
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
@@ -46,4 +52,50 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+abstract class SalinApkChecklist : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val apkDirectory: DirectoryProperty
+
+    @get:Internal
+    abstract val artifactsLoader: Property<BuiltArtifactsLoader>
+
+    @get:OutputFile
+    abstract val distributionFile: RegularFileProperty
+
+    @TaskAction
+    fun salinApk() {
+        val metadata = checkNotNull(artifactsLoader.get().load(apkDirectory.get())) {
+            "Metadata APK rilis tidak ditemukan."
+        }
+        val apk = checkNotNull(metadata.elements.singleOrNull { it.filters.isEmpty() }) {
+            "APK universal tidak ditemukan dalam hasil build rilis."
+        }
+        val target = distributionFile.get().asFile
+        File(apk.outputFile).copyTo(target, overwrite = true)
+        logger.lifecycle("APK untuk dibagikan: $target")
+    }
+}
+
+val androidVariants = extensions.getByType<ApplicationAndroidComponentsExtension>()
+androidVariants.onVariants(androidVariants.selector().withName("release")) { variant ->
+    val universal = variant.outputs.singleOrNull { it.filters.isEmpty() } ?: return@onVariants
+    val apkDirectoryProvider = variant.artifacts.get(SingleArtifact.APK)
+    val loader = variant.artifacts.getBuiltArtifactsLoader()
+    val outputPath = universal.versionName.zip(universal.versionCode) { version, build ->
+        "outputs/distribusi/Checklist_ME_PAMASUKA_v${version}+${build}.apk"
+    }
+    val destination = layout.buildDirectory.file(outputPath)
+
+    val copyApk = tasks.register<SalinApkChecklist>("siapkanApkChecklist") {
+        description = "Menyalin APK rilis ke folder distribusi dengan nama yang memuat versi dan nomor build."
+        apkDirectory.set(apkDirectoryProvider)
+        artifactsLoader.set(loader)
+        distributionFile.set(destination)
+    }
+    tasks.matching { it.name == "assembleRelease" }.configureEach {
+        dependsOn(copyApk)
+    }
 }
