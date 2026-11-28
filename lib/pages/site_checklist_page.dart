@@ -111,7 +111,9 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
       final draftRaw = prefs.getString(_draftKey);
       final legacyRaw = widget.siteId == 'UPD-178' ? prefs.getString('ttc_sudiang_form_data') : null;
       final draft = draftRaw == null ? <String, dynamic>{} : SiteChecklistConfig.map(jsonDecode(draftRaw));
-      final saved = draft['values'] is Map ? SiteChecklistConfig.map(draft['values']) : <String, dynamic>{};
+      final storedValues = draft['values'] is Map ? SiteChecklistConfig.map(draft['values']) : <String, dynamic>{};
+      final saved = draft['independentPanels'] == true
+          ? storedValues : config.migratePanelDraft(storedValues);
       final legacy = legacyRaw == null ? <String, dynamic>{} : SiteChecklistConfig.map(jsonDecode(legacyRaw));
       for (final f in config.fields) {
         final value = f.readOnly ? f.fixed?.toString() ?? '' :
@@ -195,7 +197,7 @@ class _SiteChecklistPageState extends State<SiteChecklistPage> with WidgetsBindi
   Future<void> _saveDraft() {
     final prefs = _prefs;
     if (prefs == null || _config == null || _loading) { return Future<void>.value(); }
-    final encoded = jsonEncode({'values': _values(), 'staff': _staff, 'report': _report});
+    final encoded = jsonEncode({'values': _values(), 'independentPanels': true, 'staff': _staff, 'report': _report});
     // Urutan penulisan tetap, supaya draft lama tidak menimpa perubahan terbaru.
     _writes = _writes.then((_) async {
       if (!await prefs.setString(_draftKey, encoded)) { throw StateError('Draft gagal disimpan.'); }

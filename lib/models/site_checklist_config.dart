@@ -31,6 +31,45 @@ class SiteChecklistConfig {
   List<Map<String, dynamic>> items(String key) =>
       (json[key] as List).map(map).toList();
   List<Map<String, dynamic>> get pln => (power['pln'] as List).map(map).toList();
+  late final List<Map<String, dynamic>> transformers = power.containsKey('transformers')
+      ? (power['transformers'] as List).map(map).toList()
+      : [{'id': 'trafo1', 'capacityKva': power['transformerKva']}];
+
+  late final List<String> panelIds = List.generate(
+      (power['lvmdp'] as int?) ?? pln.length, (i) => 'lvmdp${i + 1}');
+
+  String panelTitle(int index) =>
+      panelIds.length == 1 ? 'Load LVMDP' : 'Load LVMDP ${index + 1}';
+
+  List<String> _panelPhotos(int index) {
+    final byPanel = power['lvmdpPhotos'];
+    if (byPanel is Map) {
+      return List<String>.from(byPanel['${index + 1}'] as List? ?? const []);
+    }
+    if (power.containsKey('lvmdp')) return [];
+    final feeds = pln;
+    return index < feeds.length ? photoIds(feeds[index]) : [];
+  }
+
+  // Sebelum kartu panel berdiri sendiri, pembacaannya tersimpan pada ID PLN.
+  Map<String, dynamic> migratePanelDraft(Map<String, dynamic> saved) {
+    final result = Map<String, dynamic>.from(saved);
+    // Draft lama menyimpan meter kWh dalam urutan array PLN waktu draft dibuat.
+    final storedFeeds = [for (final key in saved.keys)
+      if (key.endsWith('.kwh')) key.substring(0, key.length - '.kwh'.length)];
+    final feeds = pln;
+    for (final (i, panelId) in panelIds.indexed) {
+      if (i >= storedFeeds.length && i >= feeds.length) break;
+      final oldFeed = i < storedFeeds.length ? storedFeeds[i] : feeds[i]['id'] as String;
+      final card = cards.firstWhere((card) => card.id == panelId);
+      for (final field in card.rows.expand((row) => row)) {
+        final metric = field.id.substring(panelId.length);
+        final oldId = '$oldFeed$metric';
+        if (saved.containsKey(oldId)) result[field.id] = saved[oldId];
+      }
+    }
+    return result;
+  }
   Iterable<ChecklistFieldSpec> get fields => cards.expand((c) => c.rows.expand((r) => r));
   List<String> get tabIds => mode == 'floor'
       ? items('floors').map((f) => f['id'] as String).toList()
@@ -141,7 +180,26 @@ class SiteChecklistConfig {
     void positiveOrNull(dynamic n, String name) {
       check(n == null || (n is num && n.isFinite && n > 0), '$name harus positif atau null.');
     }
-    positiveOrNull(power['transformerKva'], 'transformerKva');
+    if (power.containsKey('transformers')) {
+      final list = power['transformers'];
+      check(list is List && list.isNotEmpty && list.every((item) => item is Map),
+          'power.transformers harus berisi minimal satu objek trafo.');
+    }
+    if (power.containsKey('lvmdp')) {
+      final count = power['lvmdp'];
+      check(count is int && count > 0, 'power.lvmdp harus bilangan bulat positif.');
+    }
+    if (power.containsKey('lvmdpPhotos')) {
+      final byPanel = power['lvmdpPhotos'];
+      check(byPanel is Map, 'power.lvmdpPhotos harus berupa objek.');
+      for (final entry in (byPanel as Map).entries) {
+        final index = int.tryParse(entry.key.toString());
+        check(index != null && index >= 1 && index <= panelIds.length && entry.key == '$index',
+            'Nomor panel foto tidak tersedia: ${entry.key}.');
+        check(entry.value is List && (entry.value as List).every((id) => id is String),
+            'Daftar foto panel ${entry.key} harus berupa array ID foto.');
+      }
+    }
     final ids = <String>{'power', 'devices'};
     for (final key in ['gensets', 'tanks', 'rectifiers', 'ups', 'rooms']) {
       for (final item in items(key)) {
@@ -169,6 +227,17 @@ class SiteChecklistConfig {
           }
         }
       }
+    }
+    for (final id in panelIds) {
+      check(!ids.contains(id), 'ID panel $id sudah dipakai perangkat lain.');
+    }
+    for (final trafo in transformers) {
+      final id = trafo['id'];
+      if (power.containsKey('transformers')) {
+        check(id is String && RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(id) && ids.add(id),
+            'ID trafo tidak valid/ganda.');
+      }
+      positiveOrNull(trafo['capacityKva'], 'capacityKva trafo');
     }
     for (final p in pln) {
       check(p['id'] is String && RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(p['id'] as String) && ids.add(p['id'] as String), 'ID PLN tidak valid/ganda.');
@@ -223,15 +292,27 @@ class SiteChecklistConfig {
     String cardFloor(Map<String, dynamic> item) => item['floor'] as String? ?? '';
     final pf = cardFloor(power);
     final powerRows = <List<ChecklistFieldSpec>>[
-      [d('statusPln', 'Status PLN', 'Status PLN', ['ON', 'OFF'], legacy: 'statusPln'),
-       n('trafo', 'Capacity Trafo', 'kVA', 'Capacity Trafo', fixed: power['transformerKva'], readOnly: true)],
+      [d('statusPln', 'Status PLN', 'Status PLN', ['ON', 'OFF'], legacy: 'statusPln')],
     ];
+    ChecklistFieldSpec trafoField(int i) {
+      final t = transformers[i];
+      final no = (i + 1).toString().padLeft(2, '0');
+      final label = transformers.length == 1 ? 'Capacity Trafo' : 'Capacity Trafo ${i + 1}';
+      return n('trafo.${t['id']}.capacity', label, 'kVA', 'Trafo $no Capacity',
+          fixed: t['capacityKva'], readOnly: true);
+    }
+    if (transformers.length == 1) powerRows.first.add(trafoField(0));
     for (var i = 0; i < pln.length; i++) {
       final p = pln[i]; final id = p['id'] as String;
       powerRows.add([
         n('$id.capacity', 'Capacity PLN ${i + 1}', 'kVA', 'Capacity PLN ${i + 1}', fixed: p['capacityKva'], readOnly: true),
         n('$id.kwh', 'KWH Meter ${i + 1}', 'kWh', i == 0 ? 'KWH' : 'KWH PLN ${i + 1}', legacy: i == 0 ? 'kwh' : null),
       ]);
+    }
+    if (transformers.length > 1) {
+      for (var i = 0; i < transformers.length; i += 2) {
+        powerRows.add([trafoField(i), if (i + 1 < transformers.length) trafoField(i + 1)]);
+      }
     }
     add('power', 'Status Power', pf, 'Main Power', powerRows, photos: photoIds(power));
     final totals = map(json['deviceTotals']);
@@ -243,16 +324,23 @@ class SiteChecklistConfig {
       fail.add(n('failed.${entry.key}', '${entry.value} Failed', '/${totals[entry.key]}', sheet, max: (totals[entry.key] as num).toDouble(), legacy: old, allowZero: true, allowSame: true));
     }
     add('devices', 'Update Perangkat', pf, 'Main Power', [fail, [n('racks', 'Jumlah Rak Perangkat', 'rak', 'Jumlah Rak Perangkat', allowSame: true)]], photos: List<String>.from((json['devicePhotos'] as List?) ?? []));
-    for (var i = 0; i < pln.length; i++) {
-      final p = pln[i]; final id = p['id'] as String;
-      final prefix = i == 0 ? 'LVMDP' : 'PLN_${i + 1}';
-      String? old(String s) => i == 0 ? 'lvmdp$s' : null;
-      add(id, pln.length == 1 ? 'Load PLN' : 'Load PLN ${i + 1}', pf, 'Main Power', [
-        [n('$id.kva', 'Load', 'kVA', '${prefix}_KVA', legacy: old('Kva')), n('$id.kw', 'Load', 'kW', '${prefix}_KW', legacy: old('Kw')), n('$id.cos', 'Cos phi', '', '${prefix}_Cos_Phi', max: 1, legacy: old('CosPhi'))],
-        [for (final s in ['R-S','S-T','T-R']) n('$id.v$s', s, 'V', '${prefix}_Tegangan_$s')],
-        [for (final s in ['R-N','S-N','T-N','N-G']) n('$id.v$s', s, 'V', '${prefix}_Tegangan_$s', allowZero: s == 'N-G', legacy: old({'R-N':'Rs','S-N':'Sn','T-N':'Tn','N-G':'Ng'}[s]!))],
-        [for (final s in ['R','S','T']) n('$id.a$s', 'Arus $s', 'A', '${prefix}_Load_$s', legacy: old('Arus$s'))],
-      ], photos: photoIds(p));
+    for (final (i, id) in panelIds.indexed) {
+      final no = (i + 1).toString().padLeft(2, '0');
+      ChecklistFieldSpec reading(String metric, String label, String unit, String column,
+          {String? legacy, double? max}) =>
+          n('$id.$metric', label, unit, 'LVMDP $no $column',
+              allowZero: true, max: max, legacy: i == 0 ? legacy : null);
+      const oldVoltage = {'R-N': 'lvmdpRs', 'S-N': 'lvmdpSn', 'T-N': 'lvmdpTn', 'N-G': 'lvmdpNg'};
+      add(id, panelTitle(i), pf, 'Main Power', [
+        [reading('kva', 'Load', 'kVA', 'kVA', legacy: 'lvmdpKva'),
+          reading('kw', 'Load', 'kW', 'kW', legacy: 'lvmdpKw'),
+          reading('cos', 'Cos phi', '', 'CosPhi', max: 1, legacy: 'lvmdpCosPhi')],
+        [for (final ph in ['R-S','S-T','T-R']) reading('v$ph', ph, 'V', 'Tegangan $ph')],
+        [for (final ph in oldVoltage.keys)
+          reading('v$ph', ph, 'V', 'Tegangan $ph', legacy: oldVoltage[ph])],
+        [for (final ph in ['R','S','T'])
+          reading('a$ph', 'Arus $ph', 'A', 'Load $ph', legacy: 'lvmdpArus$ph')],
+      ], photos: _panelPhotos(i));
     }
     for (final g in items('gensets')) {
       final id = g['id'] as String; final prefix = g['sheetPrefix']; final index = g['legacyIndex'];

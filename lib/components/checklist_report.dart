@@ -247,9 +247,9 @@ class ChecklistReport {
         final prefix = '${key == 'ups' ? 'UPS' : 'Rect'} ${(i + 1).toString().padLeft(2, '0')}';
         final mapping = key == 'ups'
             ? {'status':'Status','kw':'Load kW','kva':'Load kVA','occ':'Occupancy (%)',
-               'volt':'Batt Voltage','runtime':'Runtime',
-               for (final p in ['R','S','T']) 'v$p':'Output $p (V)',
-               for (final p in ['R','S','T']) 'a$p':'Arus $p (A)'}
+          'volt':'Batt Voltage','runtime':'Runtime',
+          for (final p in ['R','S','T']) 'v$p':'Output $p (V)',
+          for (final p in ['R','S','T']) 'a$p':'Arus $p (A)'}
             : {'status':'Status','kw':'Load kW','amp':'Load Ampere','volt':'Voltage','occ':'Load Occupancy (%)'};
         final off = values['$id.status'] == 'OFF';
         for (final e in mapping.entries) {
